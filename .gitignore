@@ -69,6 +69,11 @@ secrets/
 docker-compose.local.yml
 scripts/local/
 
+# Development output directories
+dev-output/
+dev-logs/
+dev-backups/
+
 # Submodule-specific ignores
 # (Let submodules handle their own .gitignore)
 

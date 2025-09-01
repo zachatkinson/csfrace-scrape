@@ -1,5 +1,3 @@
-version: '3.8'
-
 # CSFrace Scrape - Development Docker Compose Configuration
 # Optimized for local development with hot reloading and debugging
 
@@ -12,6 +10,8 @@ volumes:
     driver: local
   redis-dev-data:
     driver: local
+  uv-cache:
+    driver: local
 
 services:
   # Backend - Development with hot reloading
@@ -19,7 +19,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-      target: production  # Use production stage for now
+      target: builder  # Use builder stage for development with build tools
     ports:
       - "${BACKEND_PORT:-8000}:8000"
       - "5678:5678"  # Debugger port
@@ -36,14 +36,19 @@ services:
       - CORS_ORIGINS=http://localhost:3000,http://localhost:3001
       - ENABLE_DEBUG_TOOLBAR=true
       - PYTEST_TIMEOUT=60
+      - UV_CACHE_DIR=/tmp/.uv-cache
+      - PYTHONPATH=/build/src
+      - UV_PROJECT_ENVIRONMENT=/usr/local
     volumes:
-      # Mount source for hot reloading
-      - ./backend/src:/app/src:rw
-      - ./backend/tests:/app/tests:rw
-      - ./backend/pyproject.toml:/app/pyproject.toml:ro
+      # Mount source for hot reloading  
+      - ./backend/src:/build/src:rw
+      - ./backend/tests:/build/tests:rw
+      - ./backend/pyproject.toml:/build/pyproject.toml:ro
       # Development output directories
-      - ./dev-output:/app/output:rw
-      - ./dev-logs:/app/logs:rw
+      - ./dev-output:/build/output:rw
+      - ./dev-logs:/build/logs:rw
+      # UV cache directory with proper permissions
+      - uv-cache:/tmp/.uv-cache
     depends_on:
       postgres-dev:
         condition: service_healthy
@@ -65,7 +70,6 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      target: development  # Development stage with dev server
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     environment:
@@ -98,7 +102,7 @@ services:
 
   # PostgreSQL - Development Database
   postgres-dev:
-    image: postgres:15-alpine
+    image: postgres:latest
     environment:
       - POSTGRES_DB=${POSTGRES_DB:-csfrace_dev}
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
@@ -129,7 +133,7 @@ services:
 
   # Redis - Development Cache
   redis-dev:
-    image: redis:7-alpine
+    image: redis:latest
     command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
     volumes:
       - redis-dev-data:/data
@@ -147,7 +151,7 @@ services:
 
   # Prometheus - Development Monitoring
   prometheus-dev:
-    image: prom/prometheus:v2.40.0
+    image: prom/prometheus:latest
     ports:
       - "${PROMETHEUS_PORT:-9090}:9090"
     volumes:
@@ -166,7 +170,7 @@ services:
 
   # Grafana - Development Dashboard
   grafana-dev:
-    image: grafana/grafana:9.0.0
+    image: grafana/grafana:latest
     ports:
       - "${GRAFANA_PORT:-3001}:3000"
     environment:
@@ -190,15 +194,13 @@ services:
 
   # pgAdmin - Development Database Management
   pgadmin:
-    image: dpage/pgadmin4:7
+    image: dpage/pgadmin4:latest
     ports:
       - "8080:80"
     environment:
-      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL:-admin@csfrace.local}
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL:-admin@example.com}
       - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASSWORD:-admin}
       - PGADMIN_CONFIG_SERVER_MODE=False
-    volumes:
-      - ./monitoring/pgadmin/servers.json:/pgadmin4/servers.json:ro
     depends_on:
       - postgres-dev
     networks:

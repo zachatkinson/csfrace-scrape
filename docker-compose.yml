@@ -1,5 +1,3 @@
-version: '3.8'
-
 # CSFrace Scrape - Production Docker Compose Configuration
 # This orchestrates the backend scraper and frontend interface
 
