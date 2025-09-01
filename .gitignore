@@ -1,0 +1,98 @@
+# CSFrace Scrape Wrapper - .gitignore
+
+# Environment Files
+.env
+.env.local
+.env.*.local
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+.nyc_output/
+
+# IDE / Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/
+
+# Build artifacts (if any scripts generate them)
+dist/
+build/
+
+# Monitoring data
+monitoring/data/
+grafana/data/
+prometheus/data/
+
+# Backup files
+*.bak
+*.backup
+
+# Secrets (even though they should be in .env)
+secrets/
+*.pem
+*.key
+*.crt
+
+# Local development overrides
+docker-compose.local.yml
+scripts/local/
+
+# Submodule-specific ignores
+# (Let submodules handle their own .gitignore)
+
+# Node.js (if any scripts use Node)
+node_modules/
+package-lock.json
+yarn.lock
+
+# Python (if any scripts use Python)
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.so
+.venv
+venv/
+ENV/
+
+# JetBrains IDEs
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Visual Studio Code
+.vscode/
+*.code-workspace

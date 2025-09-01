@@ -1,0 +1,90 @@
+name: ✨ Feature Request
+description: Suggest a new feature for the CSFrace Scrape wrapper
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+assignees: ["zachatkinson"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a feature! This form is for **wrapper orchestration** features (Docker, monitoring, deployment).
+        
+        For component-specific features:
+        - **Backend Features**: [csfrace-scrape-back repository](https://github.com/zachatkinson/csfrace-scrape-back/issues)
+        - **Frontend Features**: [csfrace-scrape-front repository](https://github.com/zachatkinson/csfrace-scrape-front/issues)
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Feature Category
+      description: What type of wrapper feature is this?
+      options:
+        - Docker Compose enhancement
+        - Monitoring/observability
+        - Development tooling
+        - Deployment automation
+        - Service orchestration
+        - Configuration management
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem does this feature solve?
+      placeholder: Describe the current limitation or pain point
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe your proposed solution
+      placeholder: How would you like this feature to work?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Other solutions you've considered
+      placeholder: What other approaches could solve this problem?
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this feature to your workflow?
+      options:
+        - Low - Nice to have
+        - Medium - Would improve workflow
+        - High - Blocking current work
+        - Critical - Project cannot proceed
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: implementation
+    attributes:
+      label: Implementation Scope
+      description: Check all that apply
+      options:
+        - label: Requires changes to Docker Compose files
+        - label: Needs new monitoring/alerting
+        - label: Requires documentation updates
+        - label: Affects environment configuration
+        - label: Changes service networking
+        - label: Adds new dependencies
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any other context, mockups, or examples
+      placeholder: Screenshots, diagrams, related issues, etc.

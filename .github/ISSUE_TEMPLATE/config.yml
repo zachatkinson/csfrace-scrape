@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🐍 Backend Issues (Python/Scraping)
+    url: https://github.com/zachatkinson/csfrace-scrape-back/issues
+    about: Report bugs or request features for the Python backend scraper
+  - name: ⚛️ Frontend Issues (React/TypeScript)
+    url: https://github.com/zachatkinson/csfrace-scrape-front/issues
+    about: Report bugs or request features for the React frontend interface
+  - name: 📚 Documentation
+    url: https://github.com/zachatkinson/csfrace-scrape/wiki
+    about: View project documentation and setup guides
+  - name: 💬 Discussions
+    url: https://github.com/zachatkinson/csfrace-scrape/discussions
+    about: Ask questions, share ideas, or discuss the project

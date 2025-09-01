@@ -1,0 +1,207 @@
+name: Integration Testing
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - 'docker-compose*.yml'
+      - '.env.example'
+      - 'monitoring/**'
+      - 'scripts/**'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [master, main]
+    paths:
+      - 'docker-compose*.yml'
+      - '.env.example'
+      - 'monitoring/**'
+      - 'scripts/**'
+      - '.github/workflows/**'
+  # Trigger when submodules are updated
+  repository_dispatch:
+    types: [backend-updated, frontend-updated]
+  # Manual trigger for full integration testing
+  workflow_dispatch:
+    inputs:
+      test_type:
+        description: 'Type of integration test'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+        - full
+        - backend-only
+        - frontend-only
+        - monitoring-only
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  COMPOSE_PROJECT_NAME: csfrace-scrape-test
+
+jobs:
+  # Validate Docker Compose Configuration
+  compose-validation:
+    name: Docker Compose Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: false  # Don't need submodules for config validation
+          persist-credentials: false
+
+      - name: Validate production compose file
+        run: |
+          echo "🔍 Validating docker-compose.yml..."
+          docker-compose -f docker-compose.yml config --quiet
+          echo "✅ Production compose file is valid"
+
+      - name: Validate development compose file
+        run: |
+          echo "🔍 Validating docker-compose.dev.yml..."
+          docker-compose -f docker-compose.dev.yml config --quiet
+          echo "✅ Development compose file is valid"
+
+      - name: Check environment template
+        run: |
+          echo "🔍 Checking .env.example completeness..."
+          # Verify all variables referenced in compose files exist in .env.example
+          grep -o '\${[^}]*}' docker-compose*.yml | sort -u | while read var; do
+            var_name=$(echo $var | sed 's/\${//; s/:-.*}//; s/}$//')
+            if ! grep -q "^$var_name=" .env.example; then
+              echo "❌ Missing environment variable in .env.example: $var_name"
+              exit 1
+            fi
+          done
+          echo "✅ Environment template is complete"
+
+  # Integration Test with Mock Services
+  integration-test:
+    name: Service Integration Test
+    runs-on: ubuntu-latest
+    needs: compose-validation
+    timeout-minutes: 20
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Set up test environment
+        run: |
+          # Create test environment file
+          cp .env.example .env
+          
+          # Override with test-specific values
+          cat >> .env << EOF
+          ENVIRONMENT=test
+          BACKEND_PORT=8000
+          FRONTEND_PORT=3000
+          POSTGRES_PASSWORD=test_password
+          GRAFANA_ADMIN_PASSWORD=test_password
+          EOF
+
+      - name: Start core services (database, cache)
+        run: |
+          echo "🚀 Starting core services..."
+          docker-compose up -d postgres redis
+          
+          echo "⏳ Waiting for services to be healthy..."
+          timeout 60s bash -c 'until docker-compose ps | grep -E "(postgres|redis)" | grep -q "healthy"; do sleep 5; done'
+          
+          echo "✅ Core services are running"
+
+      - name: Verify service health
+        run: |
+          echo "🔍 Checking service health..."
+          
+          # Check PostgreSQL
+          docker-compose exec -T postgres pg_isready -U postgres
+          
+          # Check Redis
+          docker-compose exec -T redis redis-cli ping
+          
+          echo "✅ All core services are healthy"
+
+      - name: Test service networking
+        run: |
+          echo "🌐 Testing service networking..."
+          
+          # Test PostgreSQL connectivity from another container
+          docker run --rm --network csfrace-scrape-test_csfrace-network \
+            postgres:15-alpine \
+            psql -h postgres -U postgres -d csfrace -c "SELECT 1;"
+          
+          # Test Redis connectivity
+          docker run --rm --network csfrace-scrape-test_csfrace-network \
+            redis:7-alpine \
+            redis-cli -h redis ping
+          
+          echo "✅ Service networking is working"
+
+      - name: Test monitoring stack (if enabled)
+        run: |
+          echo "📊 Testing monitoring services..."
+          
+          # Start monitoring services
+          docker-compose --profile monitoring up -d prometheus-dev grafana-dev
+          
+          # Wait for services
+          timeout 60s bash -c 'until curl -sf http://localhost:9090/-/healthy; do sleep 5; done'
+          timeout 60s bash -c 'until curl -sf http://localhost:3001/api/health; do sleep 5; done'
+          
+          echo "✅ Monitoring stack is working"
+
+      - name: Cleanup test environment
+        if: always()
+        run: |
+          echo "🧹 Cleaning up test environment..."
+          docker-compose down -v
+          docker system prune -f
+          echo "✅ Cleanup completed"
+
+  # Security Scan for Docker Compose
+  security-scan:
+    name: Docker Compose Security Scan
+    runs-on: ubuntu-latest
+    needs: compose-validation
+    timeout-minutes: 10
+    permissions:
+      security-events: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run Checkov security scan
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: .
+          framework: dockerfile,docker_compose
+          output_format: sarif
+          output_file_path: checkov-results.sarif
+        continue-on-error: true
+
+      - name: Upload Checkov results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: checkov-results.sarif
+          category: checkov
+
+      - name: Check for secrets in configuration
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: main
+          head: HEAD
+          extra_args: --only-verified

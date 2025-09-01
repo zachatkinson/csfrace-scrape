@@ -1,0 +1,240 @@
+version: '3.8'
+
+# CSFrace Scrape - Development Docker Compose Configuration
+# Optimized for local development with hot reloading and debugging
+
+networks:
+  csfrace-dev-network:
+    driver: bridge
+
+volumes:
+  postgres-dev-data:
+    driver: local
+  redis-dev-data:
+    driver: local
+
+services:
+  # Backend - Development with hot reloading
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: development  # Development stage with dev dependencies
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+      - "5678:5678"  # Debugger port
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - LOG_LEVEL=${BACKEND_LOG_LEVEL:-DEBUG}
+      - RELOAD_ON_CHANGE=true
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres-dev:5432/${POSTGRES_DB:-csfrace_dev}
+      - REDIS_URL=${REDIS_URL:-redis://redis-dev:6379/0}
+      - SCRAPER_CONCURRENT_REQUESTS=${SCRAPER_CONCURRENT_REQUESTS:-5}
+      - SCRAPER_REQUEST_TIMEOUT=${SCRAPER_REQUEST_TIMEOUT:-30}
+      - ENABLE_CORS=true
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:3001
+      - ENABLE_DEBUG_TOOLBAR=true
+      - PYTEST_TIMEOUT=60
+    volumes:
+      # Mount source for hot reloading
+      - ./backend/src:/app/src:rw
+      - ./backend/tests:/app/tests:rw
+      - ./backend/pyproject.toml:/app/pyproject.toml:ro
+      # Development output directories
+      - ./dev-output:/app/output:rw
+      - ./dev-logs:/app/logs:rw
+    depends_on:
+      postgres-dev:
+        condition: service_healthy
+      redis-dev:
+        condition: service_healthy
+    networks:
+      - csfrace-dev-network
+    restart: unless-stopped
+    # Relaxed health check for development
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 60s
+      timeout: 10s
+      retries: 2
+      start_period: 60s
+
+  # Frontend - Development with hot reloading
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: development  # Development stage with dev server
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=development
+      - REACT_APP_API_URL=${FRONTEND_API_URL:-http://localhost:8000}
+      - REACT_APP_API_TIMEOUT=${FRONTEND_API_TIMEOUT:-30000}
+      - REACT_APP_THEME=${FRONTEND_THEME:-light}
+      - REACT_APP_MONITORING_ENABLED=true
+      - FAST_REFRESH=true
+      - CHOKIDAR_USEPOLLING=true  # For Windows/macOS file watching
+    volumes:
+      # Mount source for hot reloading
+      - ./frontend/src:/app/src:rw
+      - ./frontend/public:/app/public:rw
+      - ./frontend/package.json:/app/package.json:ro
+      - ./frontend/tsconfig.json:/app/tsconfig.json:ro
+    depends_on:
+      backend:
+        condition: service_started  # Don't wait for healthy in dev
+    networks:
+      - csfrace-dev-network
+    restart: unless-stopped
+    # Relaxed health check for development
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 60s
+      timeout: 10s
+      retries: 2
+      start_period: 60s
+
+  # PostgreSQL - Development Database
+  postgres-dev:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-csfrace_dev}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+    volumes:
+      - postgres-dev-data:/var/lib/postgresql/data
+      - ./scripts/dev-init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+      # Development: expose data directory for backup/restore
+      - ./dev-backups:/backups:rw
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"  # Expose for external tools
+    networks:
+      - csfrace-dev-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-csfrace_dev}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    # Development: smaller resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: '0.5'
+
+  # Redis - Development Cache
+  redis-dev:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-dev-data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"  # Expose for external tools
+    networks:
+      - csfrace-dev-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Prometheus - Development Monitoring
+  prometheus-dev:
+    image: prom/prometheus:v2.40.0
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./monitoring/prometheus.dev.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+      - '--storage.tsdb.retention.time=7d'  # Shorter retention for dev
+      - '--log.level=debug'
+    networks:
+      - csfrace-dev-network
+    restart: unless-stopped
+    profiles:
+      - monitoring  # Start with: docker-compose --profile monitoring up
+
+  # Grafana - Development Dashboard
+  grafana-dev:
+    image: grafana/grafana:9.0.0
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_AUTH_ANONYMOUS_ENABLED=true  # Allow anonymous in dev
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel,grafana-worldmap-panel
+      - GF_LOG_LEVEL=debug
+    volumes:
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dev-config:/etc/grafana:ro
+    depends_on:
+      - prometheus-dev
+    networks:
+      - csfrace-dev-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  # pgAdmin - Development Database Management
+  pgadmin:
+    image: dpage/pgadmin4:7
+    ports:
+      - "8080:80"
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL:-admin@csfrace.local}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASSWORD:-admin}
+      - PGADMIN_CONFIG_SERVER_MODE=False
+    volumes:
+      - ./monitoring/pgadmin/servers.json:/pgadmin4/servers.json:ro
+    depends_on:
+      - postgres-dev
+    networks:
+      - csfrace-dev-network
+    restart: unless-stopped
+    profiles:
+      - tools
+
+  # Redis Commander - Development Cache Management
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=local:redis-dev:6379
+      - HTTP_USER=${REDIS_COMMANDER_USER:-admin}
+      - HTTP_PASSWORD=${REDIS_COMMANDER_PASSWORD:-admin}
+    depends_on:
+      - redis-dev
+    networks:
+      - csfrace-dev-network
+    restart: unless-stopped
+    profiles:
+      - tools
+
+  # Mailhog - Development Email Testing
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+    networks:
+      - csfrace-dev-network
+    restart: unless-stopped
+    profiles:
+      - tools
+
+# Development-specific overrides
+# Use: docker-compose -f docker-compose.dev.yml up -d
