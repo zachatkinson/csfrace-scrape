@@ -19,7 +19,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-      target: development  # Development stage with dev dependencies
+      target: production  # Use production stage for now
     ports:
       - "${BACKEND_PORT:-8000}:8000"
       - "5678:5678"  # Debugger port
