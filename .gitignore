@@ -77,10 +77,20 @@ dev-backups/
 # Submodule-specific ignores
 # (Let submodules handle their own .gitignore)
 
-# Node.js (if any scripts use Node)
+# Node.js (frontend and any scripts)
 node_modules/
+**/node_modules/
 package-lock.json
 yarn.lock
+pnpm-lock.yaml
+.pnpm-store/
+
+# Frontend build artifacts
+frontend/dist/
+frontend/build/
+frontend/.astro/
+frontend/.netlify/
+frontend/*.tsbuildinfo
 
 # Python (if any scripts use Python)
 __pycache__/

@@ -86,6 +86,8 @@ services:
       - ./frontend/public:/app/public:rw
       - ./frontend/package.json:/app/package.json:ro
       - ./frontend/tsconfig.json:/app/tsconfig.json:ro
+      - ./frontend/tailwind.config.js:/app/tailwind.config.js:ro
+      - ./frontend/astro.config.ts:/app/astro.config.ts:ro
     depends_on:
       backend:
         condition: service_started  # Don't wait for healthy in dev
@@ -102,7 +104,7 @@ services:
 
   # PostgreSQL - Development Database
   postgres-dev:
-    image: postgres:latest
+    image: postgres:15-alpine
     environment:
       - POSTGRES_DB=${POSTGRES_DB:-csfrace_dev}
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
