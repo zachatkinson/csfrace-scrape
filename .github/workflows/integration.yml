@@ -55,30 +55,47 @@ jobs:
           submodules: false  # Don't need submodules for config validation
           persist-credentials: false
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Validate production compose file
         run: |
           echo "🔍 Validating docker-compose.yml..."
-          docker-compose -f docker-compose.yml config --quiet
+          docker compose -f docker-compose.yml config --quiet
           echo "✅ Production compose file is valid"
-
+          
       - name: Validate development compose file
         run: |
           echo "🔍 Validating docker-compose.dev.yml..."
-          docker-compose -f docker-compose.dev.yml config --quiet
+          docker compose -f docker-compose.dev.yml config --quiet
           echo "✅ Development compose file is valid"
 
       - name: Check environment template
         run: |
           echo "🔍 Checking .env.example completeness..."
           # Verify all variables referenced in compose files exist in .env.example
-          grep -o '\${[^}]*}' docker-compose*.yml | sort -u | while read var; do
-            var_name=$(echo $var | sed 's/\${//; s/:-.*}//; s/}$//')
-            if ! grep -q "^$var_name=" .env.example; then
-              echo "❌ Missing environment variable in .env.example: $var_name"
+          if [ -f .env.example ]; then
+            # Extract environment variables from compose files and check if they exist in .env.example
+            env_vars=$(grep -ho '\${[^}]*}' docker-compose*.yml 2>/dev/null | sort -u || echo "")
+            missing_vars=""
+            
+            for var in $env_vars; do
+              # Clean the variable name (remove ${, :-, and })
+              var_name=$(echo "$var" | sed 's/\${//; s/:-[^}]*}//; s/}$//')
+              if [ -n "$var_name" ] && ! grep -q "^$var_name=" .env.example; then
+                missing_vars="$missing_vars $var_name"
+              fi
+            done
+            
+            if [ -n "$missing_vars" ]; then
+              echo "❌ Missing environment variables in .env.example:$missing_vars"
               exit 1
+            else
+              echo "✅ Environment template is complete"
             fi
-          done
-          echo "✅ Environment template is complete"
+          else
+            echo "⚠️ No .env.example file found - skipping environment template check"
+          fi
 
   # Integration Test with Mock Services
   integration-test:
@@ -111,10 +128,10 @@ jobs:
       - name: Start core services (database, cache)
         run: |
           echo "🚀 Starting core services..."
-          docker-compose up -d postgres redis
+          docker compose up -d postgres redis
           
           echo "⏳ Waiting for services to be healthy..."
-          timeout 60s bash -c 'until docker-compose ps | grep -E "(postgres|redis)" | grep -q "healthy"; do sleep 5; done'
+          timeout 60s bash -c 'until docker compose ps | grep -E "(postgres|redis)" | grep -q "healthy"; do sleep 5; done'
           
           echo "✅ Core services are running"
 
@@ -123,10 +140,10 @@ jobs:
           echo "🔍 Checking service health..."
           
           # Check PostgreSQL
-          docker-compose exec -T postgres pg_isready -U postgres
+          docker compose exec -T postgres pg_isready -U postgres
           
           # Check Redis
-          docker-compose exec -T redis redis-cli ping
+          docker compose exec -T redis redis-cli ping
           
           echo "✅ All core services are healthy"
 
@@ -151,7 +168,7 @@ jobs:
           echo "📊 Testing monitoring services..."
           
           # Start monitoring services
-          docker-compose --profile monitoring up -d prometheus-dev grafana-dev
+          docker compose --profile monitoring up -d prometheus-dev grafana-dev
           
           # Wait for services
           timeout 60s bash -c 'until curl -sf http://localhost:9090/-/healthy; do sleep 5; done'
@@ -163,7 +180,7 @@ jobs:
         if: always()
         run: |
           echo "🧹 Cleaning up test environment..."
-          docker-compose down -v
+          docker compose down -v
           docker system prune -f
           echo "✅ Cleanup completed"
 
