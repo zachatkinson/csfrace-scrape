@@ -4,7 +4,7 @@ on:
   push:
     branches: [master, main]
     paths:
-      - 'docker-compose*.yml'
+      - 'docker compose*.yml'
       - '.env.example'
       - 'monitoring/**'
       - 'scripts/**'
@@ -12,7 +12,7 @@ on:
   pull_request:
     branches: [master, main]
     paths:
-      - 'docker-compose*.yml'
+      - 'docker compose*.yml'
       - '.env.example'
       - 'monitoring/**'
       - 'scripts/**'
@@ -60,41 +60,58 @@ jobs:
 
       - name: Validate production compose file
         run: |
-          echo "🔍 Validating docker-compose.yml..."
-          docker compose -f docker-compose.yml config --quiet
+          echo "🔍 Validating docker compose.yml..."
+          docker compose -f docker compose.yml config --quiet
           echo "✅ Production compose file is valid"
           
       - name: Validate development compose file
         run: |
-          echo "🔍 Validating docker-compose.dev.yml..."
-          docker compose -f docker-compose.dev.yml config --quiet
+          echo "🔍 Validating docker compose.dev.yml..."
+          docker compose -f docker compose.dev.yml config --quiet
           echo "✅ Development compose file is valid"
 
       - name: Check environment template
         run: |
-          echo "🔍 Checking .env.example completeness..."
-          # Verify all variables referenced in compose files exist in .env.example
+          echo "🔍 Checking .env.example for essential user configuration..."
           if [ -f .env.example ]; then
-            # Extract environment variables from compose files and check if they exist in .env.example
-            env_vars=$(grep -ho '\${[^}]*}' docker-compose*.yml 2>/dev/null | sort -u || echo "")
-            missing_vars=""
+            # Define essential variables that users MUST configure
+            # These are variables without sensible defaults that users need to set
+            essential_vars="
+              BACKEND_PORT
+              FRONTEND_PORT
+              POSTGRES_PASSWORD
+              POSTGRES_DB
+              POSTGRES_USER
+              DATABASE_URL
+              ENVIRONMENT
+              COMPOSE_PROJECT_NAME
+            "
             
-            for var in $env_vars; do
-              # Clean the variable name (remove ${, :-, and })
-              var_name=$(echo "$var" | sed 's/\${//; s/:-[^}]*}//; s/}$//')
-              if [ -n "$var_name" ] && ! grep -q "^$var_name=" .env.example; then
-                missing_vars="$missing_vars $var_name"
+            missing_essential=""
+            for var in $essential_vars; do
+              if [ -n "$var" ] && ! grep -q "^$var=" .env.example; then
+                missing_essential="$missing_essential $var"
               fi
             done
             
-            if [ -n "$missing_vars" ]; then
-              echo "❌ Missing environment variables in .env.example:$missing_vars"
+            if [ -n "$missing_essential" ]; then
+              echo "❌ Missing essential variables in .env.example:$missing_essential"
+              echo "💡 These variables require user configuration and should be documented."
               exit 1
             else
-              echo "✅ Environment template is complete"
+              echo "✅ Essential user configuration variables are documented"
             fi
+            
+            # Check that .env.example exists and is not empty
+            if [ ! -s .env.example ]; then
+              echo "⚠️ .env.example is empty - should contain configuration examples"
+              exit 1
+            fi
+            
+            echo "📋 Found $(grep -c '^[A-Z]' .env.example) configuration variables in .env.example"
           else
-            echo "⚠️ No .env.example file found - skipping environment template check"
+            echo "❌ No .env.example file found - users need configuration guidance"
+            exit 1
           fi
 
   # Integration Test with Mock Services
