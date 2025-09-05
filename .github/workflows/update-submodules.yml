@@ -168,7 +168,7 @@ jobs:
         id: create-pr
         uses: peter-evans/create-pull-request@v5
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.SUBMODULE_UPDATE_TOKEN }}
           commit-message: |
             chore: update submodules to latest versions
             
