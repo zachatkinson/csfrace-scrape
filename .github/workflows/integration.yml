@@ -1,4 +1,4 @@
-name: Integration Testing
+name: Integration Testing & Submodule Sync
 
 on:
   push:
@@ -17,22 +17,29 @@ on:
       - 'monitoring/**'
       - 'scripts/**'
       - '.github/workflows/**'
+  # Scheduled submodule sync check
+  schedule:
+    - cron: '0 6 * * *'  # Daily at 6 AM UTC
   # Trigger when submodules are updated
   repository_dispatch:
-    types: [backend-updated, frontend-updated]
-  # Manual trigger for full integration testing
+    types: [backend-updated, frontend-updated, submodule-updated]
+  # Manual trigger for integration testing or submodule sync
   workflow_dispatch:
     inputs:
-      test_type:
-        description: 'Type of integration test'
+      action_type:
+        description: 'Type of action to perform'
         required: true
-        default: 'full'
+        default: 'integration-test'
         type: choice
         options:
-        - full
-        - backend-only
-        - frontend-only
-        - monitoring-only
+        - integration-test
+        - submodule-sync
+        - both
+      force_submodule_update:
+        description: 'Force update all submodules (for submodule-sync)'
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -42,11 +49,109 @@ env:
   COMPOSE_PROJECT_NAME: csfrace-scrape-test
 
 jobs:
-  # Validate Docker Compose Configuration
+  # Submodule sync jobs (only run on schedule or manual dispatch)
+  check-submodule-updates:
+    name: Check & Update Submodules
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.action_type == 'submodule-sync' || github.event.inputs.action_type == 'both'))
+    permissions:
+      contents: write
+      pull-requests: write
+    
+    outputs:
+      backend-updated: ${{ steps.check-updates.outputs.backend-updated }}
+      frontend-updated: ${{ steps.check-updates.outputs.frontend-updated }}
+      updates-available: ${{ steps.check-updates.outputs.updates-available }}
+    
+    steps:
+      - name: Checkout with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Check for submodule updates
+        id: check-updates
+        run: |
+          echo "🔍 Checking for submodule updates..."
+          
+          # Initialize tracking
+          backend_updated=false
+          frontend_updated=false
+          updates_available=false
+          
+          # Check backend updates
+          if [ -d "backend" ]; then
+            cd backend
+            git fetch origin
+            local_commit=$(git rev-parse HEAD)
+            remote_commit=$(git rev-parse origin/master 2>/dev/null || git rev-parse origin/main)
+            
+            if [ "$local_commit" != "$remote_commit" ]; then
+              echo "📦 Backend updates available: $local_commit -> $remote_commit"
+              backend_updated=true
+              updates_available=true
+            fi
+            cd ..
+          fi
+          
+          # Check frontend updates
+          if [ -d "frontend" ]; then
+            cd frontend
+            git fetch origin
+            local_commit=$(git rev-parse HEAD)
+            remote_commit=$(git rev-parse origin/main 2>/dev/null || git rev-parse origin/master)
+            
+            if [ "$local_commit" != "$remote_commit" ]; then
+              echo "🎨 Frontend updates available: $local_commit -> $remote_commit"
+              frontend_updated=true
+              updates_available=true
+            fi
+            cd ..
+          fi
+          
+          # Set outputs
+          echo "backend-updated=$backend_updated" >> $GITHUB_OUTPUT
+          echo "frontend-updated=$frontend_updated" >> $GITHUB_OUTPUT
+          echo "updates-available=$updates_available" >> $GITHUB_OUTPUT
+          
+          if [ "$updates_available" = "true" ] || [ "${{ github.event.inputs.force_submodule_update }}" = "true" ]; then
+            echo "✅ Updates will be applied"
+          else
+            echo "✅ No updates needed"
+          fi
+
+      - name: Update submodules
+        if: steps.check-updates.outputs.updates-available == 'true' || github.event.inputs.force_submodule_update == 'true'
+        run: |
+          echo "🔄 Updating submodules..."
+          git submodule update --remote --merge
+          
+          # Check if there are changes to commit
+          if git diff --staged --quiet; then
+            echo "ℹ️ No submodule changes to commit"
+          else
+            # Create and push commit
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add .
+            git commit -m "chore(submodules): update to latest versions
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+            git push origin ${{ github.ref_name }}
+            echo "✅ Submodules updated and committed"
+          fi
+
+  # Integration testing jobs (run on push, PR, or manual dispatch)
   compose-validation:
     name: Docker Compose Validation
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'repository_dispatch' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.action_type == 'integration-test' || github.event.inputs.action_type == 'both'))
     
     steps:
       - name: Checkout code
@@ -119,6 +224,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: compose-validation
     timeout-minutes: 20
+    if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'repository_dispatch' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.action_type == 'integration-test' || github.event.inputs.action_type == 'both'))
     
     steps:
       - name: Checkout code
@@ -214,6 +320,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: compose-validation
     timeout-minutes: 10
+    if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'repository_dispatch' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.action_type == 'integration-test' || github.event.inputs.action_type == 'both'))
     permissions:
       security-events: write
     
