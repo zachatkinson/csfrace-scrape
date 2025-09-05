@@ -17,12 +17,27 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Guard job to prevent accidental execution on wrong events
+  validate-trigger:
+    name: Validate Workflow Trigger
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Check trigger event
+        run: |
+          echo "Workflow triggered by: ${{ github.event_name }}"
+          if [[ "${{ github.event_name }}" != "schedule" && "${{ github.event_name }}" != "workflow_dispatch" ]]; then
+            echo "❌ ERROR: This workflow should only run on schedule or workflow_dispatch"
+            echo "Current event: ${{ github.event_name }}"
+            exit 1
+          fi
+          echo "✅ Valid trigger event: ${{ github.event_name }}"
+
   check-submodule-updates:
     name: Check & Update Submodules
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Only run on schedule or manual dispatch, never on push
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: validate-trigger
     permissions:
       contents: write
       pull-requests: write
