@@ -60,14 +60,14 @@ jobs:
 
       - name: Validate production compose file
         run: |
-          echo "🔍 Validating docker compose.yml..."
-          docker compose -f docker compose.yml config --quiet
+          echo "🔍 Validating docker-compose.yml..."
+          docker compose -f docker-compose.yml config --quiet
           echo "✅ Production compose file is valid"
           
       - name: Validate development compose file
         run: |
-          echo "🔍 Validating docker compose.dev.yml..."
-          docker compose -f docker compose.dev.yml config --quiet
+          echo "🔍 Validating docker-compose.dev.yml..."
+          docker compose -f docker-compose.dev.yml config --quiet
           echo "✅ Development compose file is valid"
 
       - name: Check environment template
