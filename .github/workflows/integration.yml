@@ -169,6 +169,7 @@ jobs:
           
           # Test PostgreSQL connectivity from another container
           docker run --rm --network csfrace-scrape-test_csfrace-network \
+            -e PGPASSWORD=test_password \
             postgres:15-alpine \
             psql -h postgres -U postgres -d csfrace -c "SELECT 1;"
           
@@ -215,21 +216,37 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Run Checkov security scan
-        uses: bridgecrewio/checkov-action@v12
+      - name: Run Trivy security scan on Docker Compose
+        uses: aquasecurity/trivy-action@master
         with:
-          directory: .
-          framework: dockerfile,docker_compose
-          output_format: sarif
-          output_file_path: checkov-results.sarif
+          scan-type: 'config'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-config-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
         continue-on-error: true
 
-      - name: Upload Checkov results to GitHub Security
+      - name: Run Hadolint on Dockerfiles
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: 'backend/Dockerfile'
+          format: sarif
+          output-file: hadolint-results.sarif
+        continue-on-error: true
+
+      - name: Upload Trivy results to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
-          sarif_file: checkov-results.sarif
-          category: checkov
+          sarif_file: 'trivy-config-results.sarif'
+          category: 'trivy-config'
+
+      - name: Upload Hadolint results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always() && hashFiles('hadolint-results.sarif') != ''
+        with:
+          sarif_file: 'hadolint-results.sarif'
+          category: 'hadolint'
 
       - name: Check for secrets in configuration
         uses: trufflesecurity/trufflehog@main
