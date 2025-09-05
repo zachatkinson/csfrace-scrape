@@ -34,7 +34,7 @@ check_prerequisites() {
     fi
     
     # Check Docker Compose
-    if ! command -v docker-compose &> /dev/null; then
+    if ! command -v docker compose &> /dev/null; then
         log_error "Docker Compose is required but not installed"
         exit 1
     fi
@@ -80,7 +80,7 @@ validate_config() {
     log_info "Validating Docker Compose configuration..."
     
     # Validate production config
-    if docker-compose -f docker-compose.yml config --quiet; then
+    if docker compose -f docker compose.yml config --quiet; then
         log_success "Production configuration is valid"
     else
         log_error "Production configuration has errors"
@@ -88,7 +88,7 @@ validate_config() {
     fi
     
     # Validate development config
-    if docker-compose -f docker-compose.dev.yml config --quiet; then
+    if docker compose -f docker compose.dev.yml config --quiet; then
         log_success "Development configuration is valid"
     else
         log_error "Development configuration has errors"
@@ -102,20 +102,20 @@ test_services() {
     
     # Start core services
     log_info "Starting core services (postgres, redis)..."
-    docker-compose -f docker-compose.dev.yml up -d postgres-dev redis-dev
+    docker compose -f docker compose.dev.yml up -d postgres-dev redis-dev
     
     # Wait for health checks
     log_info "Waiting for services to be healthy..."
-    timeout 60s bash -c 'until docker-compose -f docker-compose.dev.yml ps | grep -E "(postgres-dev|redis-dev)" | grep -q "healthy"; do sleep 5; done'
+    timeout 60s bash -c 'until docker compose -f docker compose.dev.yml ps | grep -E "(postgres-dev|redis-dev)" | grep -q "healthy"; do sleep 5; done'
     
     # Test connectivity
     log_info "Testing service connectivity..."
-    docker-compose -f docker-compose.dev.yml exec -T postgres-dev pg_isready -U postgres
-    docker-compose -f docker-compose.dev.yml exec -T redis-dev redis-cli ping
+    docker compose -f docker compose.dev.yml exec -T postgres-dev pg_isready -U postgres
+    docker compose -f docker compose.dev.yml exec -T redis-dev redis-cli ping
     
     # Cleanup
     log_info "Cleaning up test services..."
-    docker-compose -f docker-compose.dev.yml down
+    docker compose -f docker compose.dev.yml down
     
     log_success "Service integration test passed"
 }
@@ -149,12 +149,12 @@ main() {
     
     log_info "Next steps:"
     echo "  1. Review and customize .env file"
-    echo "  2. Start development environment: docker-compose -f docker-compose.dev.yml up -d"
+    echo "  2. Start development environment: docker compose -f docker compose.dev.yml up -d"
     echo "  3. Access services:"
     echo "     - Frontend: http://localhost:3000"
     echo "     - Backend: http://localhost:8000"
     echo "     - Grafana: http://localhost:3001 (admin/admin)"
-    echo "  4. View logs: docker-compose -f docker-compose.dev.yml logs -f"
+    echo "  4. View logs: docker compose -f docker compose.dev.yml logs -f"
 }
 
 # Run main function

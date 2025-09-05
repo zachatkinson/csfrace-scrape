@@ -4,41 +4,66 @@ This guide explains how to set up GitHub tokens and secrets for the automated su
 
 ## 🔐 Required GitHub Tokens
 
-You need to create **2 Personal Access Tokens (PATs)** with specific permissions:
+You need to create **2 Fine-Grained Personal Access Tokens** with specific permissions for better security:
 
 ### 1. Submodule Update Token (for umbrella repo)
 **Purpose:** Allows the umbrella repo to update submodule references and create PRs
 
+**Repository Access:** `zachatkinson/csfrace-scrape` only
+
 **Permissions needed:**
-- `repo` (Full control of private repositories)
-- `workflow` (Update GitHub Action workflows)
+- `Contents` (Read and Write) - Update submodule references
+- `Metadata` (Read) - Access repository metadata
+- `Pull requests` (Write) - Create and manage PRs
+- `Actions` (Write) - Trigger workflows
 
 ### 2. Repository Dispatch Token (for backend/frontend repos)
 **Purpose:** Allows backend/frontend repos to trigger workflows in the umbrella repo
 
+**Repository Access:** `zachatkinson/csfrace-scrape` only
+
 **Permissions needed:**
-- `repo` (Full control of private repositories)
-- `workflow` (Update GitHub Action workflows)
+- `Metadata` (Read) - Access repository metadata  
+- `Actions` (Write) - Trigger repository dispatch events
 
 ## 📝 Step-by-Step Setup
 
-### Step 1: Create Personal Access Tokens
+### Step 1: Create Fine-Grained Personal Access Tokens
 
-1. Go to [GitHub Settings > Developer settings > Personal access tokens](https://github.com/settings/tokens)
-2. Click "Generate new token (classic)"
-3. Create **Token 1 - Submodule Update Token**:
+1. Go to [GitHub Settings > Developer settings > Personal access tokens > Fine-grained tokens](https://github.com/settings/personal-access-tokens/new)
+
+2. Create **Token 1 - Submodule Update Token**:
    - Name: `Submodule Update Token - csfrace-scrape`
-   - Expiration: 1 year (or no expiration if preferred)
-   - Scopes: ✅ `repo`, ✅ `workflow`
+   - Expiration: 90 days (recommended for security)
+   - Resource owner: `zachatkinson`
+   - Selected repositories: ✅ `zachatkinson/csfrace-scrape` ONLY
+   - Repository permissions:
+     - ✅ Contents: Read and write
+     - ✅ Metadata: Read  
+     - ✅ Pull requests: Write
+     - ✅ Actions: Write
    - Click "Generate token"
    - **Copy and save this token securely**
 
-4. Create **Token 2 - Repository Dispatch Token**:
+3. Create **Token 2 - Repository Dispatch Token**:
    - Name: `Repository Dispatch Token - csfrace-scrape`
-   - Expiration: 1 year (or no expiration if preferred) 
-   - Scopes: ✅ `repo`, ✅ `workflow`
+   - Expiration: 90 days (recommended for security)
+   - Resource owner: `zachatkinson`
+   - Selected repositories: ✅ `zachatkinson/csfrace-scrape` ONLY
+   - Repository permissions:
+     - ✅ Metadata: Read
+     - ✅ Actions: Write
    - Click "Generate token"
    - **Copy and save this token securely**
+
+### Alternative: Classic Tokens (If Fine-Grained Doesn't Work)
+
+If you encounter compatibility issues with fine-grained tokens:
+
+1. Go to [GitHub Settings > Developer settings > Personal access tokens > Tokens (classic)](https://github.com/settings/tokens)
+2. Click "Generate new token (classic)"
+3. Use the same naming and permissions as described above
+4. Scopes: ✅ `repo`, ✅ `workflow`
 
 ### Step 2: Add Secrets to Repositories
 
@@ -72,10 +97,12 @@ You need to create **2 Personal Access Tokens (PATs)** with specific permissions
 ## 🔒 Security Best Practices
 
 ### Token Security
-- **Store tokens securely** - Never commit them to code
-- **Use minimum required permissions** - Only the scopes listed above
-- **Set reasonable expiration dates** - 1 year maximum recommended
+- **Use fine-grained tokens** - Repository-specific access is more secure
+- **Store tokens securely** - Never commit them to code  
+- **Use minimum required permissions** - Only the permissions listed above
+- **Set short expiration dates** - 90 days maximum recommended
 - **Rotate tokens regularly** - Update when they expire
+- **Monitor token usage** - Review access logs periodically
 
 ### Repository Settings
 - **Enable branch protection** on master/main branches

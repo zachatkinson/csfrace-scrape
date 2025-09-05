@@ -6,9 +6,9 @@ This repository serves as the orchestration wrapper for the CSFrace scraping app
 ## Architecture Overview
 ```
 csfrace-scrape/                    # This wrapper repository
-├── docker-compose.yml             # Multi-service orchestration
-├── docker-compose.dev.yml         # Development environment
-├── docker-compose.prod.yml        # Production environment
+├── docker compose.yml             # Multi-service orchestration
+├── docker compose.dev.yml         # Development environment
+├── docker compose.prod.yml        # Production environment
 ├── .env.example                   # Environment template
 ├── .gitignore                     # Wrapper-level ignores
 ├── README.md                      # Overall project documentation
@@ -73,7 +73,7 @@ POSTGRES_URL=postgresql://postgres:password@postgres:5432/csfrace
 
 **Service Dependencies (MANDATORY):**
 ```yaml
-# docker-compose.yml
+# docker compose.yml
 version: '3.8'
 
 networks:
@@ -129,20 +129,20 @@ services:
 ```bash
 # Development Commands (MANDATORY)
 # Start development environment
-docker-compose -f docker-compose.dev.yml up -d
+docker compose -f docker compose.dev.yml up -d
 
 # View logs across all services
-docker-compose logs -f
+docker compose logs -f
 
 # Scale services
-docker-compose up -d --scale backend=2 --scale frontend=2
+docker compose up -d --scale backend=2 --scale frontend=2
 
 # Execute commands in running services
-docker-compose exec backend uv run python -m pytest
-docker-compose exec frontend npm test
+docker compose exec backend uv run python -m pytest
+docker compose exec frontend npm test
 
 # Rebuild specific service
-docker-compose build --no-cache backend
+docker compose build --no-cache backend
 ```
 
 ### 5. Cross-Repository Standards (MANDATORY)
@@ -170,10 +170,10 @@ docker-compose build --no-cache backend
 ```bash
 # Production Deployment (MANDATORY)
 # Build production images
-docker-compose -f docker-compose.prod.yml build
+docker compose -f docker compose.prod.yml build
 
 # Deploy with proper health checks
-docker-compose -f docker-compose.prod.yml up -d
+docker compose -f docker compose.prod.yml up -d
 
 # Verify deployment health
 scripts/health-check.sh
@@ -211,7 +211,7 @@ interface ScrapingResponse {
 **Coordinated monitoring across all services:**
 
 ```yaml
-# Monitoring stack in docker-compose.monitoring.yml
+# Monitoring stack in docker compose.monitoring.yml
 services:
   prometheus:
     image: prom/prometheus:latest
@@ -251,7 +251,7 @@ on:
     paths:
       - 'backend/**'
       - 'frontend/**'
-      - 'docker-compose*.yml'
+      - 'docker compose*.yml'
 
 jobs:
   integration-test:
@@ -262,7 +262,7 @@ jobs:
           submodules: recursive
       
       - name: Start services
-        run: docker-compose -f docker-compose.test.yml up -d
+        run: docker compose -f docker compose.test.yml up -d
       
       - name: Run integration tests
         run: |
@@ -270,11 +270,11 @@ jobs:
           scripts/wait-for-services.sh
           
           # Run cross-service integration tests
-          docker-compose exec backend pytest tests/integration/
-          docker-compose exec frontend npm run test:integration
+          docker compose exec backend pytest tests/integration/
+          docker compose exec frontend npm run test:integration
           
           # Run end-to-end tests
-          docker-compose exec e2e-tests npm run test:e2e
+          docker compose exec e2e-tests npm run test:e2e
 ```
 
 ## Repository-Specific Rules
@@ -319,11 +319,11 @@ cd csfrace-scrape
 cp .env.example .env
 
 # Start development environment
-docker-compose -f docker-compose.dev.yml up -d
+docker compose -f docker compose.dev.yml up -d
 
 # View service logs
-docker-compose logs -f backend
-docker-compose logs -f frontend
+docker compose logs -f backend
+docker compose logs -f frontend
 
 # Update submodules
 git submodule update --remote --merge
@@ -333,12 +333,12 @@ curl http://localhost:8000/health  # Backend health
 curl http://localhost:3000/        # Frontend health
 
 # Stop all services
-docker-compose down
+docker compose down
 
 # Clean rebuild
-docker-compose down -v
-docker-compose build --no-cache
-docker-compose up -d
+docker compose down -v
+docker compose build --no-cache
+docker compose up -d
 ```
 
 This wrapper CLAUDE.md focuses on orchestration concerns while letting each repository maintain its own specific development standards.

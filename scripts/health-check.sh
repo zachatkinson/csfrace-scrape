@@ -62,7 +62,7 @@ check_docker_services() {
     log_info "Checking Docker service status..."
     
     # Get running services
-    local running_services=$(docker-compose ps --services --filter "status=running")
+    local running_services=$(docker compose ps --services --filter "status=running")
     
     if [ -z "$running_services" ]; then
         log_error "No services are running"
@@ -71,7 +71,7 @@ check_docker_services() {
     
     echo "Running services:"
     echo "$running_services" | while read service; do
-        local status=$(docker-compose ps "$service" --format "table {{.State}}" | tail -n +2)
+        local status=$(docker compose ps "$service" --format "table {{.State}}" | tail -n +2)
         if [[ "$status" == *"healthy"* ]] || [[ "$status" == *"running"* ]]; then
             log_success "  ✅ $service: $status"
         else
@@ -105,7 +105,7 @@ check_service_endpoints() {
 check_database() {
     log_info "Checking database connectivity..."
     
-    if docker-compose exec -T postgres pg_isready -U postgres > /dev/null 2>&1; then
+    if docker compose exec -T postgres pg_isready -U postgres > /dev/null 2>&1; then
         log_success "PostgreSQL is ready"
     else
         log_error "PostgreSQL is not ready"
@@ -113,7 +113,7 @@ check_database() {
     fi
     
     # Test actual connection
-    if docker-compose exec -T postgres psql -U postgres -d csfrace -c "SELECT 1;" > /dev/null 2>&1; then
+    if docker compose exec -T postgres psql -U postgres -d csfrace -c "SELECT 1;" > /dev/null 2>&1; then
         log_success "Database connection test passed"
     else
         log_error "Database connection test failed"
@@ -125,7 +125,7 @@ check_database() {
 check_cache() {
     log_info "Checking Redis cache connectivity..."
     
-    if docker-compose exec -T redis redis-cli ping > /dev/null 2>&1; then
+    if docker compose exec -T redis redis-cli ping > /dev/null 2>&1; then
         log_success "Redis is responding"
     else
         log_error "Redis is not responding"
@@ -133,9 +133,9 @@ check_cache() {
     fi
     
     # Test cache operations
-    if docker-compose exec -T redis redis-cli set health_check "$(date)" > /dev/null 2>&1; then
+    if docker compose exec -T redis redis-cli set health_check "$(date)" > /dev/null 2>&1; then
         log_success "Redis write test passed"
-        docker-compose exec -T redis redis-cli del health_check > /dev/null 2>&1
+        docker compose exec -T redis redis-cli del health_check > /dev/null 2>&1
     else
         log_error "Redis write test failed"
         return 1
@@ -150,7 +150,7 @@ show_status_summary() {
     echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
     
     # Show Docker compose status
-    docker-compose ps
+    docker compose ps
     
     echo
     log_info "Quick access URLs:"
@@ -190,9 +190,9 @@ main() {
         log_error "❌ Some health checks failed"
         echo
         log_info "Troubleshooting tips:"
-        echo "  • Check logs: docker-compose logs -f"
-        echo "  • Restart services: docker-compose restart"
-        echo "  • Full reset: docker-compose down -v && docker-compose up -d"
+        echo "  • Check logs: docker compose logs -f"
+        echo "  • Restart services: docker compose restart"
+        echo "  • Full reset: docker compose down -v && docker compose up -d"
         exit 1
     fi
 }

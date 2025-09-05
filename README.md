@@ -59,10 +59,10 @@ nano .env
 ### 3. Start Development Environment
 ```bash
 # Start all services
-docker-compose -f docker-compose.dev.yml up -d
+docker compose -f docker compose.dev.yml up -d
 
 # View logs
-docker-compose logs -f
+docker compose logs -f
 ```
 
 ### 4. Access Applications
@@ -77,8 +77,8 @@ docker-compose logs -f
 csfrace-scrape/                     # This orchestration repository
 ├── README.md                       # This file
 ├── CLAUDE.md                       # Development standards
-├── docker-compose.yml              # Production orchestration
-├── docker-compose.dev.yml          # Development environment
+├── docker compose.yml              # Production orchestration
+├── docker compose.dev.yml          # Development environment
 ├── .env.example                    # Environment template
 ├── .gitignore                      # Git ignore rules
 ├── scripts/                        # Orchestration scripts
@@ -113,35 +113,35 @@ git commit -m "chore: update submodules to latest versions"
 ### Service Management
 ```bash
 # Start specific services
-docker-compose up -d backend redis postgres
+docker compose up -d backend redis postgres
 
 # Scale services
-docker-compose up -d --scale backend=2
+docker compose up -d --scale backend=2
 
 # View service logs
-docker-compose logs -f backend
-docker-compose logs -f frontend
+docker compose logs -f backend
+docker compose logs -f frontend
 
 # Execute commands in services
-docker-compose exec backend uv run pytest
-docker-compose exec frontend npm test
+docker compose exec backend uv run pytest
+docker compose exec frontend npm test
 
 # Restart services
-docker-compose restart backend
+docker compose restart backend
 ```
 
 ### Development Commands
 ```bash
 # Full environment reset
-docker-compose down -v
-docker-compose build --no-cache
-docker-compose up -d
+docker compose down -v
+docker compose build --no-cache
+docker compose up -d
 
 # Database operations
-docker-compose exec postgres psql -U postgres -d csfrace
+docker compose exec postgres psql -U postgres -d csfrace
 
 # Cache operations
-docker-compose exec redis redis-cli
+docker compose exec redis redis-cli
 
 # Health checks
 curl http://localhost:8000/health
@@ -193,20 +193,20 @@ GRAFANA_ADMIN_PASSWORD=admin
 ### Integration Testing
 ```bash
 # Run integration tests across all services
-docker-compose -f docker-compose.test.yml up -d
+docker compose -f docker compose.test.yml up -d
 scripts/run-integration-tests.sh
 ```
 
 ### Individual Service Testing
 ```bash
 # Backend tests
-docker-compose exec backend uv run pytest tests/
+docker compose exec backend uv run pytest tests/
 
 # Frontend tests
-docker-compose exec frontend npm test
+docker compose exec frontend npm test
 
 # End-to-end tests
-docker-compose exec e2e-tests npm run test:e2e
+docker compose exec e2e-tests npm run test:e2e
 ```
 
 ## 🚀 Production Deployment
@@ -214,10 +214,10 @@ docker-compose exec e2e-tests npm run test:e2e
 ### Docker Compose Production
 ```bash
 # Build production images
-docker-compose -f docker-compose.prod.yml build
+docker compose -f docker compose.prod.yml build
 
 # Deploy with health checks
-docker-compose -f docker-compose.prod.yml up -d
+docker compose -f docker compose.prod.yml up -d
 
 # Verify deployment
 scripts/health-check.sh
@@ -247,7 +247,7 @@ open http://localhost:3001
 open http://localhost:9090
 
 # View aggregated logs
-docker-compose logs -f --tail=100
+docker compose logs -f --tail=100
 ```
 
 ## 🤝 Contributing
@@ -256,7 +256,7 @@ docker-compose logs -f --tail=100
 2. **Create feature branch**: `git checkout -b feature/amazing-feature`
 3. **Make changes to submodules** following their individual CLAUDE.md standards
 4. **Update wrapper configuration** if needed
-5. **Test integration**: `docker-compose -f docker-compose.test.yml up`
+5. **Test integration**: `docker compose -f docker compose.test.yml up`
 6. **Commit changes**: `git commit -m 'feat: add amazing feature'`
 7. **Push to branch**: `git push origin feature/amazing-feature`
 8. **Open Pull Request**
@@ -283,18 +283,18 @@ lsof -i :3000 -i :8000
 **Services not starting:**
 ```bash
 # Check logs
-docker-compose logs backend frontend
+docker compose logs backend frontend
 
 # Verify health
-docker-compose ps
+docker compose ps
 ```
 
 **Database connection issues:**
 ```bash
 # Reset database
-docker-compose down postgres
+docker compose down postgres
 docker volume rm csfrace-scrape_postgres-data
-docker-compose up -d postgres
+docker compose up -d postgres
 ```
 
 ### Getting Help

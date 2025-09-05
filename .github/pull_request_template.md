@@ -25,7 +25,7 @@
 ### 🧪 Testing
 
 <!-- Check all that apply -->
-- [ ] ✅ All services start successfully with `docker-compose up -d`
+- [ ] ✅ All services start successfully with `docker compose up -d`
 - [ ] 🔍 Service health checks pass
 - [ ] 🌐 Frontend can communicate with backend
 - [ ] 💾 Database connections work properly  
@@ -105,8 +105,8 @@ Related to #
 ```bash
 # Specific commands for reviewers to test this PR
 git checkout feature-branch
-docker-compose down -v
-docker-compose up -d
+docker compose down -v
+docker compose up -d
 # Additional testing steps...
 ```
 

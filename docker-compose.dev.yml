@@ -168,7 +168,7 @@ services:
       - csfrace-dev-network
     restart: unless-stopped
     profiles:
-      - monitoring  # Start with: docker-compose --profile monitoring up
+      - monitoring  # Start with: docker compose --profile monitoring up
 
   # Grafana - Development Dashboard
   grafana-dev:
@@ -241,4 +241,4 @@ services:
       - tools
 
 # Development-specific overrides
-# Use: docker-compose -f docker-compose.dev.yml up -d
+# Use: docker compose -f docker-compose.dev.yml up -d

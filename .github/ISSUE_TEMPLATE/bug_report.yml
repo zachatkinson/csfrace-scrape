@@ -45,7 +45,7 @@ body:
       label: Steps to Reproduce
       description: Detailed steps to reproduce the issue
       placeholder: |
-        1. Start services with `docker-compose up -d`
+        1. Start services with `docker compose up -d`
         2. Run command `...`
         3. See error
     validations:

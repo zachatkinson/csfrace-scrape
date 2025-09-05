@@ -10,7 +10,7 @@ This repository orchestrates multiple components:
 csfrace-scrape/                     # This wrapper repository  
 ├── backend/                        # Submodule: csfrace-scrape-back
 ├── frontend/                       # Submodule: csfrace-scrape-front  
-├── docker-compose*.yml             # Service orchestration
+├── docker compose*.yml             # Service orchestration
 ├── monitoring/                     # Grafana/Prometheus config
 └── scripts/                        # Automation scripts
 ```
@@ -36,7 +36,7 @@ csfrace-scrape/                     # This wrapper repository
 # Required tools
 git --version          # Git 2.30+
 docker --version       # Docker 20.10+
-docker-compose --version  # Docker Compose 2.0+
+docker compose --version  # Docker Compose 2.0+
 ```
 
 ### Initial Setup
@@ -50,10 +50,10 @@ cp .env.example .env
 # Edit .env with your preferences
 
 # 3. Start development environment
-docker-compose -f docker-compose.dev.yml up -d
+docker compose -f docker compose.dev.yml up -d
 
 # 4. Verify all services are healthy
-docker-compose ps
+docker compose ps
 curl http://localhost:8000/health  # Backend
 curl http://localhost:3000/        # Frontend
 ```
@@ -86,8 +86,8 @@ Focus on **orchestration concerns only**:
 ### 3. Test Your Changes
 ```bash
 # Test service startup
-docker-compose down -v
-docker-compose -f docker-compose.dev.yml up -d
+docker compose down -v
+docker compose -f docker compose.dev.yml up -d
 
 # Verify health checks
 scripts/health-check.sh
@@ -180,7 +180,7 @@ services:
 ### Pre-Submission Testing
 ```bash
 # 1. Full environment test
-docker-compose down -v && docker-compose up -d
+docker compose down -v && docker compose up -d
 # Wait for all services to be healthy
 
 # 2. Integration test
@@ -192,7 +192,7 @@ curl http://localhost:9090/-/healthy  # Prometheus
 curl http://localhost:3001/api/health # Grafana
 
 # 4. Cleanup test
-docker-compose down
+docker compose down
 docker system prune -f
 ```
 
@@ -262,7 +262,7 @@ Use the [feature request template](.github/ISSUE_TEMPLATE/feature_request.yml):
 
 ### Adding a New Service
 ```bash
-# 1. Add service to docker-compose.yml
+# 1. Add service to docker compose.yml
 services:
   new-service:
     image: service:latest
@@ -282,7 +282,7 @@ NEW_SERVICE_PORT=8080
 # - Add monitoring configuration if needed
 
 # 4. Test integration
-docker-compose up -d new-service
+docker compose up -d new-service
 ```
 
 ### Updating Submodules
