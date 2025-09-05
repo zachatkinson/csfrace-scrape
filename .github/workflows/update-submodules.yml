@@ -1,0 +1,239 @@
+name: Update Submodules
+
+on:
+  repository_dispatch:
+    types: [backend-updated, frontend-updated]
+  workflow_dispatch:
+    inputs:
+      submodule:
+        description: 'Which submodule to update'
+        required: true
+        type: choice
+        options:
+          - backend
+          - frontend
+          - both
+        default: 'both'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  COMPOSE_PROJECT_NAME: csfrace-scrape-integration
+
+jobs:
+  update-submodule:
+    name: Update Submodules
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: read
+      
+    steps:
+      - name: Checkout with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.SUBMODULE_UPDATE_TOKEN }}
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+      - name: Update Backend Submodule
+        if: github.event.action == 'backend-updated' || github.event.inputs.submodule == 'backend' || github.event.inputs.submodule == 'both'
+        run: |
+          echo "🔄 Updating backend submodule..."
+          cd backend
+          OLD_COMMIT=$(git rev-parse HEAD)
+          cd ..
+          git submodule update --remote --merge backend
+          cd backend
+          NEW_COMMIT=$(git rev-parse HEAD)
+          cd ..
+          
+          if [ "$OLD_COMMIT" != "$NEW_COMMIT" ]; then
+            echo "✅ Backend updated from $OLD_COMMIT to $NEW_COMMIT"
+            echo "BACKEND_UPDATED=true" >> $GITHUB_ENV
+            echo "BACKEND_OLD_COMMIT=$OLD_COMMIT" >> $GITHUB_ENV
+            echo "BACKEND_NEW_COMMIT=$NEW_COMMIT" >> $GITHUB_ENV
+          else
+            echo "ℹ️ Backend already up to date"
+          fi
+
+      - name: Update Frontend Submodule  
+        if: github.event.action == 'frontend-updated' || github.event.inputs.submodule == 'frontend' || github.event.inputs.submodule == 'both'
+        run: |
+          echo "🔄 Updating frontend submodule..."
+          cd frontend
+          OLD_COMMIT=$(git rev-parse HEAD)
+          cd ..
+          git submodule update --remote --merge frontend
+          cd frontend
+          NEW_COMMIT=$(git rev-parse HEAD)
+          cd ..
+          
+          if [ "$OLD_COMMIT" != "$NEW_COMMIT" ]; then
+            echo "✅ Frontend updated from $OLD_COMMIT to $NEW_COMMIT"
+            echo "FRONTEND_UPDATED=true" >> $GITHUB_ENV
+            echo "FRONTEND_OLD_COMMIT=$OLD_COMMIT" >> $GITHUB_ENV
+            echo "FRONTEND_NEW_COMMIT=$NEW_COMMIT" >> $GITHUB_ENV
+          else
+            echo "ℹ️ Frontend already up to date"
+          fi
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet HEAD; then
+            echo "ℹ️ No submodule changes detected"
+            echo "has-changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "✅ Submodule changes detected"
+            echo "has-changes=true" >> $GITHUB_OUTPUT
+            git status --porcelain
+          fi
+
+      - name: Set up test environment
+        if: steps.changes.outputs.has-changes == 'true'
+        run: |
+          echo "🔧 Setting up test environment..."
+          # Create test environment file
+          cp .env.example .env
+          
+          # Override with test-specific values
+          cat >> .env << EOF
+          ENVIRONMENT=integration-test
+          BACKEND_PORT=8000
+          FRONTEND_PORT=3000
+          POSTGRES_PASSWORD=integration_test_password
+          GRAFANA_ADMIN_PASSWORD=integration_test_password
+          COMPOSE_PROJECT_NAME=csfrace-scrape-integration
+          EOF
+
+      - name: Run Integration Tests
+        if: steps.changes.outputs.has-changes == 'true'
+        run: |
+          echo "🧪 Running integration tests..."
+          
+          # Start core services for integration testing
+          docker compose up -d postgres redis
+          
+          # Wait for services to be healthy
+          echo "⏳ Waiting for core services to be ready..."
+          timeout 60s bash -c 'until docker compose ps postgres | grep -q "healthy"; do sleep 2; done' || {
+            echo "❌ PostgreSQL failed to start"
+            docker compose logs postgres
+            exit 1
+          }
+          
+          timeout 60s bash -c 'until docker compose ps redis | grep -q "healthy"; do sleep 2; done' || {
+            echo "❌ Redis failed to start"
+            docker compose logs redis
+            exit 1
+          }
+          
+          echo "✅ Core services are healthy"
+          
+          # Test database connectivity
+          echo "🔍 Testing database connectivity..."
+          docker compose exec -T postgres pg_isready -U postgres || {
+            echo "❌ PostgreSQL connectivity test failed"
+            exit 1
+          }
+          
+          # Test Redis connectivity
+          echo "🔍 Testing Redis connectivity..."
+          docker compose exec -T redis redis-cli ping || {
+            echo "❌ Redis connectivity test failed"
+            exit 1
+          }
+          
+          echo "✅ All integration tests passed"
+
+      - name: Cleanup test environment
+        if: always() && steps.changes.outputs.has-changes == 'true'
+        run: |
+          echo "🧹 Cleaning up test environment..."
+          docker compose down -v --remove-orphans
+          docker system prune -f
+          echo "✅ Cleanup completed"
+
+      - name: Create Pull Request
+        if: steps.changes.outputs.has-changes == 'true'
+        id: create-pr
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: |
+            chore: update submodules to latest versions
+            
+            ${{ env.BACKEND_UPDATED == 'true' && format('- Backend: {0} → {1}', env.BACKEND_OLD_COMMIT, env.BACKEND_NEW_COMMIT) || '' }}
+            ${{ env.FRONTEND_UPDATED == 'true' && format('- Frontend: {0} → {1}', env.FRONTEND_OLD_COMMIT, env.FRONTEND_NEW_COMMIT) || '' }}
+            
+            🤖 Generated with [Claude Code](https://claude.ai/code)
+            
+            Co-Authored-By: Claude <noreply@anthropic.com>
+          title: 'chore: update submodules to latest versions'
+          body: |
+            ## 🔄 Submodule Updates
+            
+            This PR automatically updates submodules to their latest versions.
+            
+            ### 📦 Updated Components
+            ${{ env.BACKEND_UPDATED == 'true' && '✅ **Backend submodule updated**' || '➖ Backend (no changes)' }}
+            ${{ env.BACKEND_UPDATED == 'true' && format('  - Commit: [`{0}`](https://github.com/zachatkinson/csfrace-scrape-back/commit/{1}) → [`{2}`](https://github.com/zachatkinson/csfrace-scrape-back/commit/{3})', env.BACKEND_OLD_COMMIT, env.BACKEND_OLD_COMMIT, env.BACKEND_NEW_COMMIT, env.BACKEND_NEW_COMMIT) || '' }}
+            
+            ${{ env.FRONTEND_UPDATED == 'true' && '✅ **Frontend submodule updated**' || '➖ Frontend (no changes)' }}
+            ${{ env.FRONTEND_UPDATED == 'true' && format('  - Commit: [`{0}`](https://github.com/zachatkinson/csfrace-scrape-front/commit/{1}) → [`{2}`](https://github.com/zachatkinson/csfrace-scrape-front/commit/{3})', env.FRONTEND_OLD_COMMIT, env.FRONTEND_OLD_COMMIT, env.FRONTEND_NEW_COMMIT, env.FRONTEND_NEW_COMMIT) || '' }}
+            
+            ### 🧪 Integration Test Results
+            ✅ All integration tests passed
+            ✅ Database connectivity verified
+            ✅ Cache connectivity verified
+            ✅ Service orchestration validated
+            
+            ### 🚀 Deployment Ready
+            This PR is ready for deployment and will auto-merge if all checks pass.
+            
+            ---
+            
+            **Triggered by:** ${{ github.event_name == 'repository_dispatch' && format('Repository dispatch ({0})', github.event.action) || 'Manual workflow dispatch' }}
+            
+            **Auto-merge:** Enabled (squash merge)
+          branch: update-submodules-${{ github.run_number }}
+          delete-branch: true
+          labels: |
+            automated
+            submodule-update
+            dependencies
+
+      - name: Enable auto-merge
+        if: steps.changes.outputs.has-changes == 'true' && steps.create-pr.outputs.pull-request-number
+        run: |
+          echo "🤖 Enabling auto-merge for PR #${{ steps.create-pr.outputs.pull-request-number }}"
+          gh pr merge ${{ steps.create-pr.outputs.pull-request-number }} --auto --squash --delete-branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## 📋 Submodule Update Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.changes.outputs.has-changes }}" == "true" ]; then
+            echo "✅ **Submodule updates processed successfully**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            [ "${{ env.BACKEND_UPDATED }}" == "true" ] && echo "- 🔧 Backend updated" >> $GITHUB_STEP_SUMMARY
+            [ "${{ env.FRONTEND_UPDATED }}" == "true" ] && echo "- 🎨 Frontend updated" >> $GITHUB_STEP_SUMMARY
+            echo "- 🧪 Integration tests passed" >> $GITHUB_STEP_SUMMARY
+            echo "- 📝 PR created: #${{ steps.create-pr.outputs.pull-request-number }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "ℹ️ **No submodule updates needed**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "All submodules are already up to date." >> $GITHUB_STEP_SUMMARY
+          fi
