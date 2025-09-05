@@ -260,6 +260,4 @@ jobs:
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
-          base: master
-          head: HEAD
           extra_args: --only-verified
