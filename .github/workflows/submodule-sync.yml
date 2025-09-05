@@ -143,7 +143,7 @@ Frontend: $frontend_commit"
             echo "✅ Submodules updated and committed"
           fi
 
-  trigger-integration-tests:
+trigger-integration-tests:
     name: Trigger Integration Tests
     needs: check-submodule-updates
     runs-on: ubuntu-latest
