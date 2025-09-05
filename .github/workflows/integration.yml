@@ -82,7 +82,6 @@ jobs:
               POSTGRES_PASSWORD
               POSTGRES_DB
               POSTGRES_USER
-              DATABASE_URL
               ENVIRONMENT
               COMPOSE_PROJECT_NAME
             "
