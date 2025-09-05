@@ -139,9 +139,9 @@ jobs:
             git add .
             git commit -m "chore(submodules): update to latest versions
 
-🤖 Generated with [Claude Code](https://claude.ai/code)
+            🤖 Generated with [Claude Code](https://claude.ai/code)
 
-Co-Authored-By: Claude <noreply@anthropic.com>"
+            Co-Authored-By: Claude <noreply@anthropic.com>"
             git push origin ${{ github.ref_name }}
             echo "✅ Submodules updated and committed"
           fi
