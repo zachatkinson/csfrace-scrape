@@ -27,6 +27,7 @@ services:
       - ENVIRONMENT=development
       - DEBUG=true
       - LOG_LEVEL=${BACKEND_LOG_LEVEL:-DEBUG}
+      - SECRET_KEY=${SECRET_KEY}
       - RELOAD_ON_CHANGE=true
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres-dev:5432/${POSTGRES_DB:-csfrace_dev}
       - REDIS_URL=${REDIS_URL:-redis://redis-dev:6379/0}
@@ -167,8 +168,8 @@ services:
     networks:
       - csfrace-dev-network
     restart: unless-stopped
-    profiles:
-      - monitoring  # Start with: docker compose --profile monitoring up
+    # profiles:
+    #   - monitoring  # Uncomment to make monitoring optional
 
   # Grafana - Development Dashboard
   grafana-dev:
@@ -191,8 +192,8 @@ services:
     networks:
       - csfrace-dev-network
     restart: unless-stopped
-    profiles:
-      - monitoring
+    # profiles:
+    #   - monitoring  # Uncomment to make monitoring optional
 
   # pgAdmin - Development Database Management
   pgadmin:
