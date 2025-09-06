@@ -1,0 +1,34 @@
+# Prometheus Configuration for CSFrace Scrape Production
+# Based on official Prometheus documentation best practices
+# https://prometheus.io/docs/prometheus/latest/configuration/configuration/
+
+global:
+  # Default scrape interval - 15s is recommended by official docs
+  scrape_interval: 15s
+  # How frequently to evaluate rules
+  evaluation_interval: 15s
+  # External labels for identifying this Prometheus instance
+  external_labels:
+    monitor: 'csfrace-scrape-production'
+    environment: 'production'
+
+# Scrape configurations following official patterns
+scrape_configs:
+  # Prometheus self-monitoring - official getting started pattern
+  - job_name: 'prometheus'
+    # More frequent scraping for self-monitoring as per docs
+    scrape_interval: 5s
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Backend API monitoring
+  - job_name: 'csfrace-backend'
+    static_configs:
+      - targets: ['backend:8000']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    honor_labels: true
+
+  # Basic configuration - exporters can be added later as needed
+  # Following principle of starting simple and expanding

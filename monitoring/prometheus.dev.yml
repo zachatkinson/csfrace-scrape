@@ -1,0 +1,34 @@
+# Prometheus Configuration for CSFrace Scrape Development
+# Based on official Prometheus documentation best practices
+# Optimized for development with shorter retention and more frequent scraping
+
+global:
+  # Faster scraping for development feedback
+  scrape_interval: 10s
+  evaluation_interval: 10s
+  # External labels for identifying this development instance
+  external_labels:
+    monitor: 'csfrace-scrape-development'
+    environment: 'development'
+
+# Scrape configurations for development environment
+scrape_configs:
+  # Prometheus self-monitoring - official getting started pattern
+  - job_name: 'prometheus'
+    # Very frequent scraping for development
+    scrape_interval: 5s
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Backend API monitoring - development service names
+  - job_name: 'csfrace-backend-dev'
+    static_configs:
+      - targets: ['backend:8000']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+    honor_labels: true
+    # Development: more lenient timeout settings
+
+  # Development services can be added incrementally
+  # Following principle of starting simple and expanding
