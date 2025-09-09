@@ -99,29 +99,34 @@ services:
 
   # PostgreSQL Database
   postgres:
-    image: postgres:17-alpine  # Latest stable for security
+    image: postgres:17.2-alpine  # Pin specific version as per official best practices
     environment:
       - POSTGRES_DB=${POSTGRES_DB:-csfrace}
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      # Use _FILE suffix for production secrets as recommended by official docs
+      - POSTGRES_PASSWORD_FILE=${POSTGRES_PASSWORD_FILE:-}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-secure_password}
-      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
-      # Production performance settings
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C --data-checksums
+      # Production performance settings following official recommendations
       - POSTGRES_SHARED_PRELOAD_LIBRARIES=pg_stat_statements
     volumes:
+      # Official recommendation: mount data to /var/lib/postgresql/data
       - postgres-data:/var/lib/postgresql/data
-      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+      # Official recommendation: place init scripts in /docker-entrypoint-initdb.d/
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     networks:
       - csfrace-network
     restart: ${RESTART_POLICY:-unless-stopped}
+    # Official recommendation: use pg_isready for health checks
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-csfrace}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-csfrace} -h localhost"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
-    # PostgreSQL production tuning
+    # PostgreSQL production tuning following official performance guidelines
     command: >
       postgres
       -c shared_buffers=256MB
@@ -134,6 +139,8 @@ services:
       -c min_wal_size=1GB
       -c log_statement=ddl
       -c log_min_duration_statement=1000
+      -c log_line_prefix='%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
+      -c shared_preload_libraries=pg_stat_statements
     deploy:
       resources:
         limits:
@@ -145,17 +152,27 @@ services:
 
   # Redis Cache
   redis:
-    image: redis:7-alpine
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    image: redis:7.4-alpine  # Pin to specific version as per official best practices
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory ${REDIS_MAXMEMORY:-512mb}
+      --maxmemory-policy allkeys-lru
+      --save 900 1 60 1000 5 10000
+      --requirepass ${REDIS_PASSWORD:-}
+      --bind 0.0.0.0
+      --protected-mode yes
     volumes:
       - redis-data:/data
     ports:
       - "${REDIS_PORT:-6379}:6379"
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
     networks:
       - csfrace-network
     restart: ${RESTART_POLICY:-unless-stopped}
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -163,7 +180,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: ${REDIS_MEMORY_LIMIT:-512m}
+          memory: ${REDIS_MEMORY_LIMIT:-768m}  # Increased for overhead
           cpus: '0.5'
         reservations:
           memory: 128m
@@ -193,17 +210,24 @@ services:
       timeout: 10s
       retries: 3
 
-  # Grafana - Monitoring Dashboard
+  # Grafana - Monitoring Dashboard  
   grafana:
-    image: grafana/grafana:9.0.0
+    image: grafana/grafana-enterprise:11.3.0  # Official recommendation: use grafana-enterprise
     ports:
       - "${GRAFANA_PORT:-3001}:3000"
     environment:
+      # Security configuration following official best practices
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
       - GF_SECURITY_ALLOW_EMBEDDING=true
       - GF_AUTH_ANONYMOUS_ENABLED=${GRAFANA_ANONYMOUS_ACCESS:-false}
+      # Plugin installation as recommended by official docs
+      - GF_INSTALL_PLUGINS=${GRAFANA_PLUGINS:-grafana-piechart-panel,grafana-worldmap-panel}
+      # Performance and logging
+      - GF_LOG_LEVEL=${GRAFANA_LOG_LEVEL:-info}
+      - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL:-http://localhost:3001}
     volumes:
+      # Official recommendation: use named volumes for persistent storage
       - grafana-data:/var/lib/grafana
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
@@ -212,11 +236,21 @@ services:
     networks:
       - csfrace-network
     restart: ${RESTART_POLICY:-unless-stopped}
+    # Official recommendation: health check via API
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: ${GRAFANA_MEMORY_LIMIT:-1g}
+          cpus: '0.5'
+        reservations:
+          memory: 256m
+          cpus: '0.1'
 
   # Nginx Reverse Proxy (Production)
   nginx:

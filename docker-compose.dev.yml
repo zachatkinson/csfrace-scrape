@@ -110,17 +110,20 @@ services:
 
   # PostgreSQL - Development Database
   postgres-dev:
-    image: postgres:17-alpine  # Keep consistent with production
+    image: postgres:17.2-alpine  # Keep consistent with production version
     environment:
       - POSTGRES_DB=${POSTGRES_DB:-csfrace_dev}
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
-      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C --data-checksums
       # Development: Enable debug logging and statistics
       - POSTGRES_SHARED_PRELOAD_LIBRARIES=pg_stat_statements
     volumes:
+      # Official recommendation: mount data to /var/lib/postgresql/data
       - postgres-dev-data:/var/lib/postgresql/data
-      - ./scripts/dev-init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+      # Official recommendation: place init scripts in /docker-entrypoint-initdb.d/
+      - ./scripts/dev-init-db.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./scripts/init-extensions.sql:/docker-entrypoint-initdb.d/02-extensions.sql:ro
       # Development: expose data directory for backup/restore
       - ./dev-backups:/backups:rw
     ports:
@@ -128,8 +131,9 @@ services:
     networks:
       - csfrace-dev-network
     restart: unless-stopped
+    # Official recommendation: use pg_isready for health checks
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-csfrace_dev}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-csfrace_dev} -h localhost"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -144,6 +148,7 @@ services:
       -c log_statement=all
       -c log_min_duration_statement=100
       -c log_line_prefix='%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
+      -c shared_preload_libraries=pg_stat_statements
     deploy:
       resources:
         limits:
@@ -155,17 +160,27 @@ services:
 
   # Redis - Development Cache
   redis-dev:
-    image: redis:7-alpine  # Keep consistent with production
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru --save 60 1000
+    image: redis:7.4-alpine  # Keep consistent with production version
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save 60 1000 5 10000
+      --requirepass ${REDIS_DEV_PASSWORD:-}
+      --bind 0.0.0.0
+      --protected-mode no
     volumes:
       - redis-dev-data:/data
     ports:
       - "${REDIS_PORT:-6379}:6379"  # Expose for external tools
+    environment:
+      - REDIS_PASSWORD=${REDIS_DEV_PASSWORD:-}
     networks:
       - csfrace-dev-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -215,17 +230,22 @@ services:
 
   # Grafana - Development Dashboard
   grafana-dev:
-    image: grafana/grafana:9.0.0  # Keep consistent with production
+    image: grafana/grafana-enterprise:11.3.0  # Keep consistent with production
     ports:
       - "${GRAFANA_PORT:-3001}:3000"
     environment:
+      # Security configuration following official best practices
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
       - GF_SECURITY_ALLOW_EMBEDDING=true
       - GF_AUTH_ANONYMOUS_ENABLED=true  # Allow anonymous in dev
-      - GF_INSTALL_PLUGINS=grafana-piechart-panel,grafana-worldmap-panel
+      # Plugin installation as recommended by official docs
+      - GF_INSTALL_PLUGINS=${GRAFANA_DEV_PLUGINS:-grafana-piechart-panel,grafana-worldmap-panel}
+      # Development logging
       - GF_LOG_LEVEL=debug
+      - GF_SERVER_ROOT_URL=${GRAFANA_DEV_ROOT_URL:-http://localhost:3001}
     volumes:
+      # Official recommendation: use named volumes for persistent storage
       - grafana-dev-data:/var/lib/grafana
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
@@ -234,6 +254,7 @@ services:
     networks:
       - csfrace-dev-network
     restart: unless-stopped
+    # Official recommendation: health check via API
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
       interval: 30s
