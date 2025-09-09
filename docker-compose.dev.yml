@@ -12,6 +12,10 @@ volumes:
     driver: local
   uv-cache:
     driver: local
+  prometheus-dev-data:
+    driver: local
+  grafana-dev-data:
+    driver: local
 
 services:
   # Backend - Development with hot reloading
@@ -22,19 +26,20 @@ services:
       target: builder  # Use builder stage for development with build tools
     ports:
       - "${BACKEND_PORT:-8000}:8000"
-      - "5678:5678"  # Debugger port
+      - "5678:5678"  # Python debugger port (debugpy)
     environment:
       - ENVIRONMENT=development
       - DEBUG=true
       - LOG_LEVEL=${BACKEND_LOG_LEVEL:-DEBUG}
-      - SECRET_KEY=${SECRET_KEY}
+      - SECRET_KEY=${SECRET_KEY:-development-secret-change-in-production}
       - RELOAD_ON_CHANGE=true
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres-dev:5432/${POSTGRES_DB:-csfrace_dev}
       - REDIS_URL=${REDIS_URL:-redis://redis-dev:6379/0}
       - SCRAPER_CONCURRENT_REQUESTS=${SCRAPER_CONCURRENT_REQUESTS:-5}
       - SCRAPER_REQUEST_TIMEOUT=${SCRAPER_REQUEST_TIMEOUT:-30}
+      - SCRAPER_MAX_RETRIES=${SCRAPER_MAX_RETRIES:-3}
       - ENABLE_CORS=true
-      - CORS_ORIGINS=http://localhost:3000,http://localhost:3001
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:3001,http://localhost:3002
       - ENABLE_DEBUG_TOOLBAR=true
       - PYTEST_TIMEOUT=60
       - UV_CACHE_DIR=/tmp/.uv-cache
@@ -58,7 +63,7 @@ services:
     networks:
       - csfrace-dev-network
     restart: unless-stopped
-    # Relaxed health check for development
+    # Relaxed health check for development with curl
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 60s
@@ -105,12 +110,14 @@ services:
 
   # PostgreSQL - Development Database
   postgres-dev:
-    image: postgres:15-alpine
+    image: postgres:17-alpine  # Keep consistent with production
     environment:
       - POSTGRES_DB=${POSTGRES_DB:-csfrace_dev}
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
-      - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+      # Development: Enable debug logging and statistics
+      - POSTGRES_SHARED_PRELOAD_LIBRARIES=pg_stat_statements
     volumes:
       - postgres-dev-data:/var/lib/postgresql/data
       - ./scripts/dev-init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
@@ -127,17 +134,29 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
-    # Development: smaller resource limits
+    # Development: optimized for debugging, smaller resources
+    command: >
+      postgres
+      -c shared_buffers=128MB
+      -c max_connections=100
+      -c work_mem=8MB
+      -c maintenance_work_mem=32MB
+      -c log_statement=all
+      -c log_min_duration_statement=100
+      -c log_line_prefix='%t [%p]: [%l-1] user=%u,db=%d,app=%a,client=%h '
     deploy:
       resources:
         limits:
           memory: 1g
           cpus: '0.5'
+        reservations:
+          memory: 256m
+          cpus: '0.1'
 
   # Redis - Development Cache
   redis-dev:
-    image: redis:latest
-    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    image: redis:7-alpine  # Keep consistent with production
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru --save 60 1000
     volumes:
       - redis-dev-data:/data
     ports:
@@ -151,29 +170,52 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 384m
+          cpus: '0.25'
+        reservations:
+          memory: 64m
+          cpus: '0.05'
 
   # Prometheus - Development Monitoring
   prometheus-dev:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.40.0  # Keep consistent with production
     ports:
       - "${PROMETHEUS_PORT:-9090}:9090"
     volumes:
       - ./monitoring/prometheus.dev.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-dev-data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
       - '--web.enable-lifecycle'
       - '--storage.tsdb.retention.time=7d'  # Shorter retention for dev
       - '--log.level=debug'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
     networks:
       - csfrace-dev-network
     restart: unless-stopped
-    # profiles:
-    #   - monitoring  # Uncomment to make monitoring optional
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: '0.5'
+        reservations:
+          memory: 128m
+          cpus: '0.1'
 
   # Grafana - Development Dashboard
   grafana-dev:
-    image: grafana/grafana:latest
+    image: grafana/grafana:9.0.0  # Keep consistent with production
     ports:
       - "${GRAFANA_PORT:-3001}:3000"
     environment:
@@ -184,16 +226,28 @@ services:
       - GF_INSTALL_PLUGINS=grafana-piechart-panel,grafana-worldmap-panel
       - GF_LOG_LEVEL=debug
     volumes:
+      - grafana-dev-data:/var/lib/grafana
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./monitoring/grafana/dev-config:/etc/grafana:ro
     depends_on:
       - prometheus-dev
     networks:
       - csfrace-dev-network
     restart: unless-stopped
-    # profiles:
-    #   - monitoring  # Uncomment to make monitoring optional
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: '0.5'
+        reservations:
+          memory: 128m
+          cpus: '0.1'
 
   # pgAdmin - Development Database Management
   pgadmin:
