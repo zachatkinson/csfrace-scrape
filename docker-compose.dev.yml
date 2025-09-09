@@ -1,5 +1,6 @@
 # CSFrace Scrape - Development Docker Compose Configuration
 # Optimized for local development with hot reloading and debugging
+# Following modern Docker Compose best practices
 
 networks:
   csfrace-dev-network:
@@ -26,24 +27,30 @@ services:
       target: builder  # Use builder stage for development with build tools
     ports:
       - "${BACKEND_PORT:-8000}:8000"
-      - "5678:5678"  # Python debugger port (debugpy)
+    # Modern Docker Compose env_file configuration
+    env_file:
+      - .env.dev
     environment:
-      - ENVIRONMENT=development
+      - ENVIRONMENT=${ENVIRONMENT}
       - DEBUG=true
-      - LOG_LEVEL=${BACKEND_LOG_LEVEL:-DEBUG}
-      - SECRET_KEY=${SECRET_KEY:-development-secret-change-in-production}
+      - LOG_LEVEL=${BACKEND_LOG_LEVEL}
+      - SECRET_KEY=${SECRET_KEY}
       - RELOAD_ON_CHANGE=true
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres-dev:5432/${POSTGRES_DB:-csfrace_dev}
-      - REDIS_URL=${REDIS_URL:-redis://redis-dev:6379/0}
-      - CACHE_BACKEND=${CACHE_BACKEND:-redis}
-      - REDIS_HOST=${REDIS_HOST:-redis-dev}
-      - REDIS_PORT=${REDIS_PORT:-6379}
-      - REDIS_DB=${REDIS_DB:-0}
-      - SCRAPER_CONCURRENT_REQUESTS=${SCRAPER_CONCURRENT_REQUESTS:-5}
-      - SCRAPER_REQUEST_TIMEOUT=${SCRAPER_REQUEST_TIMEOUT:-30}
-      - SCRAPER_MAX_RETRIES=${SCRAPER_MAX_RETRIES:-3}
-      - ENABLE_CORS=true
-      - CORS_ORIGINS=http://localhost:3000,http://localhost:3001,http://localhost:3002
+      # Environment-aware service names (DRY: from centralized config)
+      - REDIS_SERVICE_NAME=redis-dev
+      - POSTGRES_SERVICE_NAME=postgres-dev
+      - POSTGRES_DATABASE=csfrace_dev
+      - DATABASE_URL=postgresql://postgres:postgres@postgres-dev:5432/csfrace_dev
+      - REDIS_URL=redis://redis-dev:6379/0
+      - CACHE_BACKEND=redis
+      - REDIS_HOST=redis-dev
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - SCRAPER_CONCURRENT_REQUESTS=${SCRAPER_CONCURRENT_REQUESTS}
+      - SCRAPER_REQUEST_TIMEOUT=${SCRAPER_REQUEST_TIMEOUT}
+      - SCRAPER_MAX_RETRIES=${SCRAPER_MAX_RETRIES}
+      - ENABLE_CORS=${ENABLE_CORS}
+      - CORS_ORIGINS=${CORS_ORIGINS}
       - ENABLE_DEBUG_TOOLBAR=true
       - PYTEST_TIMEOUT=60
       - UV_CACHE_DIR=/tmp/.uv-cache
@@ -82,9 +89,15 @@ services:
       dockerfile: Dockerfile
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
+    # Modern Docker Compose env_file configuration
+    env_file:
+      - .env.dev
     environment:
       - NODE_ENV=development
-      - REACT_APP_API_URL=${FRONTEND_API_URL:-http://localhost:8000}
+      # Browser-accessible URLs (not Docker service names)
+      - VITE_API_URL=http://localhost:8000
+      - PUBLIC_API_URL=http://localhost:8000
+      - REACT_APP_API_URL=http://localhost:8000
       - REACT_APP_API_TIMEOUT=${FRONTEND_API_TIMEOUT:-30000}
       - REACT_APP_THEME=${FRONTEND_THEME:-light}
       - REACT_APP_MONITORING_ENABLED=true
@@ -162,29 +175,29 @@ services:
           memory: 256m
           cpus: '0.1'
 
-  # Redis - Development Cache
+  # Redis - Development Cache (following Redis official best practices)
   redis-dev:
     image: redis:7.4-alpine  # Keep consistent with production version
-    command: >
-      redis-server
-      --appendonly yes
-      --maxmemory 256mb
-      --maxmemory-policy allkeys-lru
-      --save 60 1000 5 10000
-      --requirepass ${REDIS_DEV_PASSWORD:-}
-      --bind 0.0.0.0
-      --protected-mode no
+    command: [
+      "redis-server",
+      "--appendonly", "yes",           # Enable AOF persistence
+      "--maxmemory", "256mb",          # Set memory limit for development
+      "--maxmemory-policy", "allkeys-lru",  # LRU eviction policy
+      "--save", "60", "1000",          # RDB snapshot: save if 1000+ keys changed in 60s
+      "--bind", "0.0.0.0",             # Bind to all interfaces
+      "--protected-mode", "no",        # Disable for development (not recommended for production)
+      "--tcp-keepalive", "60",         # TCP keepalive for better connection management
+      "--timeout", "300"               # Client idle timeout (5 minutes)
+    ]
     volumes:
       - redis-dev-data:/data
     ports:
       - "${REDIS_PORT:-6379}:6379"  # Expose for external tools
-    environment:
-      - REDIS_PASSWORD=${REDIS_DEV_PASSWORD:-}
     networks:
       - csfrace-dev-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -214,6 +227,8 @@ services:
       - '--log.level=debug'
       - '--web.console.libraries=/etc/prometheus/console_libraries'
       - '--web.console.templates=/etc/prometheus/consoles'
+      # Security: Restrict CORS following 2025 best practices (default is ".*" = allow all)
+      - '--web.cors.origin=^$'  # Block all CORS origins for security (empty regex = no matches)
     networks:
       - csfrace-dev-network
     restart: unless-stopped

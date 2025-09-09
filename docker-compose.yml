@@ -31,13 +31,17 @@ services:
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - LOG_LEVEL=${BACKEND_LOG_LEVEL:-INFO}
       - SECRET_KEY=${SECRET_KEY}  # Required for security
+      # Environment-aware service names for production
+      - REDIS_SERVICE_NAME=redis
+      - POSTGRES_SERVICE_NAME=postgres
+      - POSTGRES_DATABASE=${POSTGRES_DB:-csfrace}
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-secure_password}@postgres:5432/${POSTGRES_DB:-csfrace}
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - REDIS_URL=redis://redis:6379/0
       - SCRAPER_CONCURRENT_REQUESTS=${SCRAPER_CONCURRENT_REQUESTS:-10}
       - SCRAPER_REQUEST_TIMEOUT=${SCRAPER_REQUEST_TIMEOUT:-30}
       - SCRAPER_MAX_RETRIES=${SCRAPER_MAX_RETRIES:-3}
       - ENABLE_CORS=${ENABLE_CORS:-true}
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:3010}
     depends_on:
       postgres:
         condition: service_healthy
@@ -48,7 +52,7 @@ services:
     restart: ${RESTART_POLICY:-unless-stopped}
     # Note: Distroless images don't have curl, using Python health check
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -69,7 +73,7 @@ services:
       dockerfile: Dockerfile
       target: production
     ports:
-      - "${FRONTEND_PORT:-3000}:3000"
+      - "${FRONTEND_PORT:-3010}:3000"
     environment:
       - NODE_ENV=production
       - REACT_APP_API_URL=${FRONTEND_API_URL:-http://localhost:8000}
