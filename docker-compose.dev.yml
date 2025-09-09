@@ -35,6 +35,10 @@ services:
       - RELOAD_ON_CHANGE=true
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres-dev:5432/${POSTGRES_DB:-csfrace_dev}
       - REDIS_URL=${REDIS_URL:-redis://redis-dev:6379/0}
+      - CACHE_BACKEND=${CACHE_BACKEND:-redis}
+      - REDIS_HOST=${REDIS_HOST:-redis-dev}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_DB=${REDIS_DB:-0}
       - SCRAPER_CONCURRENT_REQUESTS=${SCRAPER_CONCURRENT_REQUESTS:-5}
       - SCRAPER_REQUEST_TIMEOUT=${SCRAPER_REQUEST_TIMEOUT:-30}
       - SCRAPER_MAX_RETRIES=${SCRAPER_MAX_RETRIES:-3}
