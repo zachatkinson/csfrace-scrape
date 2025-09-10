@@ -74,13 +74,13 @@ services:
     networks:
       - csfrace-dev-network
     restart: unless-stopped
-    # Relaxed health check for development with curl
+    # Optimized health check for development using Python (curl not available in container)
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 60s
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
       timeout: 10s
-      retries: 2
-      start_period: 60s
+      retries: 3
+      start_period: 20s
 
   # Frontend - Development with hot reloading
   frontend:
@@ -98,6 +98,8 @@ services:
       - VITE_API_URL=http://localhost:8000
       - PUBLIC_API_URL=http://localhost:8000
       - REACT_APP_API_URL=http://localhost:8000
+      # Server-side API URL for Docker internal networking
+      - VITE_SERVER_API_URL=http://backend:8000
       - REACT_APP_API_TIMEOUT=${FRONTEND_API_TIMEOUT:-30000}
       - REACT_APP_THEME=${FRONTEND_THEME:-light}
       - REACT_APP_MONITORING_ENABLED=true

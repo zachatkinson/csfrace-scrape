@@ -50,9 +50,9 @@ services:
     networks:
       - csfrace-network
     restart: ${RESTART_POLICY:-unless-stopped}
-    # Note: Distroless images don't have curl, using Python health check
+    # Note: Distroless images don't have curl, using venv Python health check
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/')"]
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -163,9 +163,8 @@ services:
       --maxmemory ${REDIS_MAXMEMORY:-512mb}
       --maxmemory-policy allkeys-lru
       --save 900 1 60 1000 5 10000
-      --requirepass ${REDIS_PASSWORD:-}
       --bind 0.0.0.0
-      --protected-mode yes
+      --protected-mode no
     volumes:
       - redis-data:/data
     ports:
@@ -176,7 +175,7 @@ services:
       - csfrace-network
     restart: ${RESTART_POLICY:-unless-stopped}
     healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 30s
       timeout: 10s
       retries: 3
