@@ -24,24 +24,50 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-      target: production  # Uses distroless base for security
+      target: builder  # Uses development base for local development
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     environment:
+      # Core Settings
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - LOG_LEVEL=${BACKEND_LOG_LEVEL:-INFO}
-      - SECRET_KEY=${SECRET_KEY}  # Required for security
-      # Environment-aware service names for production
-      - REDIS_SERVICE_NAME=redis
+      - SECRET_KEY=${SECRET_KEY:-b18939e378f6b5e6c6f2ac8a7b3ee49eb3f5d6a909902abbdb4358a4093e2900}
+      
+      # Database Configuration
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-csfrace}
       - POSTGRES_SERVICE_NAME=postgres
       - POSTGRES_DATABASE=${POSTGRES_DB:-csfrace}
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-secure_password}@postgres:5432/${POSTGRES_DB:-csfrace}
+      
+      # Redis Configuration  
       - REDIS_URL=redis://redis:6379/0
+      - REDIS_SERVICE_NAME=redis
+      
+      # Scraper Configuration
       - SCRAPER_CONCURRENT_REQUESTS=${SCRAPER_CONCURRENT_REQUESTS:-10}
       - SCRAPER_REQUEST_TIMEOUT=${SCRAPER_REQUEST_TIMEOUT:-30}
       - SCRAPER_MAX_RETRIES=${SCRAPER_MAX_RETRIES:-3}
+      
+      # CORS Configuration
       - ENABLE_CORS=${ENABLE_CORS:-true}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:3010}
+      
+      # OAuth2 Configuration (using Docker interpolation with defaults)
+      - OAUTH_GOOGLE_CLIENT_ID=${OAUTH_GOOGLE_CLIENT_ID:-}
+      - OAUTH_GOOGLE_CLIENT_SECRET=${OAUTH_GOOGLE_CLIENT_SECRET:-}
+      - OAUTH_GITHUB_CLIENT_ID=${OAUTH_GITHUB_CLIENT_ID:-}
+      - OAUTH_GITHUB_CLIENT_SECRET=${OAUTH_GITHUB_CLIENT_SECRET:-}
+      - OAUTH_MICROSOFT_CLIENT_ID=${OAUTH_MICROSOFT_CLIENT_ID:-your-microsoft-client-id}
+      - OAUTH_MICROSOFT_CLIENT_SECRET=${OAUTH_MICROSOFT_CLIENT_SECRET:-your-microsoft-client-secret}
+      - OAUTH_FACEBOOK_CLIENT_ID=${OAUTH_FACEBOOK_CLIENT_ID:-your-facebook-app-id}
+      - OAUTH_FACEBOOK_CLIENT_SECRET=${OAUTH_FACEBOOK_CLIENT_SECRET:-your-facebook-app-secret}
+      - OAUTH_APPLE_CLIENT_ID=${OAUTH_APPLE_CLIENT_ID:-your-apple-service-id}
+      - OAUTH_APPLE_CLIENT_SECRET=${OAUTH_APPLE_CLIENT_SECRET:-your-apple-client-secret}
+      - OAUTH_REDIRECT_URI_BASE=${OAUTH_REDIRECT_URI_BASE:-http://localhost:8000}
+      
+      # WebAuthn Configuration
+      - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID:-localhost}
+      - WEBAUTHN_RP_NAME=${WEBAUTHN_RP_NAME:-CSFrace Backend}
+      - WEBAUTHN_ORIGIN=${WEBAUTHN_ORIGIN:-http://localhost:8000}
     depends_on:
       postgres:
         condition: service_healthy
@@ -52,7 +78,7 @@ services:
     restart: ${RESTART_POLICY:-unless-stopped}
     # Note: Distroless images don't have curl, using venv Python health check
     healthcheck:
-      test: ["CMD", "/app/.venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -76,10 +102,9 @@ services:
       - "${FRONTEND_PORT:-3010}:3000"
     environment:
       - NODE_ENV=production
-      - REACT_APP_API_URL=${FRONTEND_API_URL:-http://localhost:8000}
-      - REACT_APP_API_TIMEOUT=${FRONTEND_API_TIMEOUT:-30000}
-      - REACT_APP_THEME=${FRONTEND_THEME:-light}
-      - REACT_APP_MONITORING_ENABLED=${FRONTEND_ENABLE_MONITORING:-true}
+      # Astro will automatically load .env.production file
+      # Override specific variables if needed for different deployments
+      - SERVER_API_BASE_URL=${FRONTEND_SERVER_API_URL:-http://backend:8000}  # Internal Docker network for Server Islands
     depends_on:
       backend:
         condition: service_healthy

@@ -19,8 +19,8 @@ volumes:
     driver: local
 
 services:
-  # Backend - Development with hot reloading
-  backend:
+  # Backend - Development with hot reloading (DRY/SOLID: Fixed service name for development)
+  backend-dev:
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -29,19 +29,19 @@ services:
       - "${BACKEND_PORT:-8000}:8000"
     # Modern Docker Compose env_file configuration
     env_file:
-      - .env.dev
+      - .env
     environment:
       - ENVIRONMENT=${ENVIRONMENT}
       - DEBUG=true
       - LOG_LEVEL=${BACKEND_LOG_LEVEL}
       - SECRET_KEY=${SECRET_KEY}
       - RELOAD_ON_CHANGE=true
-      # Environment-aware service names (DRY: from centralized config)
+      # DRY/SOLID: Use fixed service names for development 
       - REDIS_SERVICE_NAME=redis-dev
       - POSTGRES_SERVICE_NAME=postgres-dev
-      - POSTGRES_DATABASE=csfrace_dev
-      - DATABASE_URL=postgresql://postgres:postgres@postgres-dev:5432/csfrace_dev
-      - REDIS_URL=redis://redis-dev:6379/0
+      - POSTGRES_DATABASE=${POSTGRES_DB}
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
       - CACHE_BACKEND=redis
       - REDIS_HOST=redis-dev
       - REDIS_PORT=6379
@@ -52,6 +52,22 @@ services:
       - ENABLE_CORS=${ENABLE_CORS}
       - CORS_ORIGINS=${CORS_ORIGINS}
       - ENABLE_DEBUG_TOOLBAR=true
+      # OAuth2 Configuration (DRY: from centralized .env)
+      - OAUTH_GOOGLE_CLIENT_ID=${OAUTH_GOOGLE_CLIENT_ID:-}
+      - OAUTH_GOOGLE_CLIENT_SECRET=${OAUTH_GOOGLE_CLIENT_SECRET:-}
+      - OAUTH_GITHUB_CLIENT_ID=${OAUTH_GITHUB_CLIENT_ID:-}
+      - OAUTH_GITHUB_CLIENT_SECRET=${OAUTH_GITHUB_CLIENT_SECRET:-}
+      - OAUTH_MICROSOFT_CLIENT_ID=${OAUTH_MICROSOFT_CLIENT_ID:-your-microsoft-client-id}
+      - OAUTH_MICROSOFT_CLIENT_SECRET=${OAUTH_MICROSOFT_CLIENT_SECRET:-your-microsoft-client-secret}
+      - OAUTH_FACEBOOK_CLIENT_ID=${OAUTH_FACEBOOK_CLIENT_ID:-your-facebook-app-id}
+      - OAUTH_FACEBOOK_CLIENT_SECRET=${OAUTH_FACEBOOK_CLIENT_SECRET:-your-facebook-app-secret}
+      - OAUTH_APPLE_CLIENT_ID=${OAUTH_APPLE_CLIENT_ID:-your-apple-service-id}
+      - OAUTH_APPLE_CLIENT_SECRET=${OAUTH_APPLE_CLIENT_SECRET:-your-apple-client-secret}
+      - OAUTH_REDIRECT_URI_BASE=${OAUTH_REDIRECT_URI_BASE}
+      # WebAuthn Configuration (DRY: from centralized .env)
+      - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID}
+      - WEBAUTHN_RP_NAME=${WEBAUTHN_RP_NAME}
+      - WEBAUTHN_ORIGIN=${WEBAUTHN_ORIGIN}
       - PYTEST_TIMEOUT=60
       - UV_CACHE_DIR=/tmp/.uv-cache
       - PYTHONPATH=/build/src
@@ -61,11 +77,17 @@ services:
       - ./backend/src:/build/src:rw
       - ./backend/tests:/build/tests:rw
       - ./backend/pyproject.toml:/build/pyproject.toml:ro
+      # Mount startup script with migrations
+      - ./backend/start-dev.sh:/build/start-dev.sh:ro
+      - ./backend/alembic:/build/alembic:ro
+      - ./backend/alembic.ini:/build/alembic.ini:ro
       # Development output directories
       - ./dev-output:/build/output:rw
       - ./dev-logs:/build/logs:rw
       # UV cache directory with proper permissions
       - uv-cache:/tmp/.uv-cache
+    # Override default command to use startup script
+    command: ["bash", "/build/start-dev.sh"]
     depends_on:
       postgres-dev:
         condition: service_healthy
@@ -74,16 +96,16 @@ services:
     networks:
       - csfrace-dev-network
     restart: unless-stopped
-    # Optimized health check for development using Python (curl not available in container)
+    # DRY/SOLID: Health check using environment variables
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${BACKEND_PORT}${BACKEND_HEALTH_ENDPOINT}')"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 20s
 
-  # Frontend - Development with hot reloading
-  frontend:
+  # Frontend - Development with hot reloading (DRY/SOLID: Fixed service name for development)
+  frontend-dev:
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -91,15 +113,15 @@ services:
       - "${FRONTEND_PORT:-3000}:3000"
     # Modern Docker Compose env_file configuration
     env_file:
-      - .env.dev
+      - .env
     environment:
       - NODE_ENV=development
-      # Browser-accessible URLs (not Docker service names)
-      - VITE_API_URL=http://localhost:8000
-      - PUBLIC_API_URL=http://localhost:8000
-      - REACT_APP_API_URL=http://localhost:8000
+      # DRY/SOLID: Use centralized URLs from .env (single source of truth)
+      - VITE_API_URL=${FRONTEND_API_URL}
+      - PUBLIC_API_URL=${FRONTEND_API_URL}
+      - REACT_APP_API_URL=${FRONTEND_API_URL}
       # Server-side API URL for Docker internal networking
-      - VITE_SERVER_API_URL=http://backend:8000
+      - VITE_SERVER_API_URL=${FRONTEND_SERVER_API_URL}
       - REACT_APP_API_TIMEOUT=${FRONTEND_API_TIMEOUT:-30000}
       - REACT_APP_THEME=${FRONTEND_THEME:-light}
       - REACT_APP_MONITORING_ENABLED=true
@@ -114,26 +136,26 @@ services:
       - ./frontend/tailwind.config.js:/app/tailwind.config.js:ro
       - ./frontend/astro.config.ts:/app/astro.config.ts:ro
     depends_on:
-      backend:
+      backend-dev:
         condition: service_started  # Don't wait for healthy in dev
     networks:
       - csfrace-dev-network
     restart: unless-stopped
-    # Relaxed health check for development
+    # DRY/SOLID: Health check using environment variables
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      test: ["CMD", "curl", "-f", "http://localhost:${FRONTEND_PORT}${FRONTEND_HEALTH_ENDPOINT}"]
       interval: 60s
       timeout: 10s
       retries: 2
       start_period: 60s
 
-  # PostgreSQL - Development Database
+  # PostgreSQL - Development Database (DRY/SOLID: Fixed service name for development)
   postgres-dev:
-    image: postgres:17.2-alpine  # Keep consistent with production version
+    image: postgres:${POSTGRES_VERSION}
     environment:
-      - POSTGRES_DB=${POSTGRES_DB:-csfrace_dev}
-      - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C --data-checksums
       # Development: Enable debug logging and statistics
       - POSTGRES_SHARED_PRELOAD_LIBRARIES=pg_stat_statements
@@ -150,9 +172,9 @@ services:
     networks:
       - csfrace-dev-network
     restart: unless-stopped
-    # Official recommendation: use pg_isready for health checks
+    # DRY/SOLID: Health check using environment variables
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-csfrace_dev} -h localhost"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} -h localhost"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -177,9 +199,9 @@ services:
           memory: 256m
           cpus: '0.1'
 
-  # Redis - Development Cache (following Redis official best practices)
+  # Redis - Development Cache (DRY/SOLID: Fixed service name for development)
   redis-dev:
-    image: redis:7.4-alpine  # Keep consistent with production version
+    image: redis:${REDIS_VERSION}
     command: [
       "redis-server",
       "--appendonly", "yes",           # Enable AOF persistence
@@ -213,9 +235,9 @@ services:
           memory: 64m
           cpus: '0.05'
 
-  # Prometheus - Development Monitoring
+  # Prometheus - Development Monitoring (DRY/SOLID: Fixed service name for development)
   prometheus-dev:
-    image: prom/prometheus:v2.40.0  # Keep consistent with production
+    image: prom/prometheus:${PROMETHEUS_VERSION}
     ports:
       - "${PROMETHEUS_PORT:-9090}:9090"
     volumes:
@@ -235,7 +257,7 @@ services:
       - csfrace-dev-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${PROMETHEUS_PORT}/-/healthy"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -249,9 +271,9 @@ services:
           memory: 128m
           cpus: '0.1'
 
-  # Grafana - Development Dashboard
+  # Grafana - Development Dashboard (DRY/SOLID: Fixed service name for development)
   grafana-dev:
-    image: grafana/grafana-enterprise:11.3.0  # Keep consistent with production
+    image: grafana/grafana-enterprise:${GRAFANA_VERSION}
     ports:
       - "${GRAFANA_PORT:-3001}:3000"
     environment:
@@ -264,7 +286,7 @@ services:
       - GF_INSTALL_PLUGINS=${GRAFANA_DEV_PLUGINS:-grafana-piechart-panel,grafana-worldmap-panel}
       # Development logging
       - GF_LOG_LEVEL=debug
-      - GF_SERVER_ROOT_URL=${GRAFANA_DEV_ROOT_URL:-http://localhost:3001}
+      - GF_SERVER_ROOT_URL=${GRAFANA_PUBLIC_URL}
     volumes:
       # Official recommendation: use named volumes for persistent storage
       - grafana-dev-data:/var/lib/grafana
@@ -275,9 +297,9 @@ services:
     networks:
       - csfrace-dev-network
     restart: unless-stopped
-    # Official recommendation: health check via API
+    # DRY/SOLID: Health check using environment variables  
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:${GRAFANA_PORT}/api/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -314,7 +336,7 @@ services:
     ports:
       - "8081:8081"
     environment:
-      - REDIS_HOSTS=local:redis-dev:6379
+      - REDIS_HOSTS=local:redis-dev:${REDIS_PORT}
       - HTTP_USER=${REDIS_COMMANDER_USER:-admin}
       - HTTP_PASSWORD=${REDIS_COMMANDER_PASSWORD:-admin}
     depends_on:
