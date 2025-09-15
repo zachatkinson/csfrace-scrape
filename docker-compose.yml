@@ -40,7 +40,9 @@ services:
       
       # Redis Configuration  
       - REDIS_URL=redis://redis:6379/0
+      - REDIS_HOST=redis
       - REDIS_SERVICE_NAME=redis
+      - CACHE_BACKEND=redis
       
       # Scraper Configuration
       - SCRAPER_CONCURRENT_REQUESTS=${SCRAPER_CONCURRENT_REQUESTS:-10}
@@ -105,6 +107,7 @@ services:
       # Astro will automatically load .env.production file
       # Override specific variables if needed for different deployments
       - SERVER_API_BASE_URL=${FRONTEND_SERVER_API_URL:-http://backend:8000}  # Internal Docker network for Server Islands
+      - PUBLIC_BACKEND_SSE_URL=${PUBLIC_BACKEND_SSE_URL:-http://localhost:8000}  # Client-side SSE connection (browser accessible)
     depends_on:
       backend:
         condition: service_healthy
