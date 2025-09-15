@@ -27,9 +27,7 @@ services:
       target: builder  # Use builder stage for development with build tools
     ports:
       - "${BACKEND_PORT:-8000}:8000"
-    # Modern Docker Compose env_file configuration
-    env_file:
-      - .env
+    # Environment variables with sensible defaults (env_file optional)
     environment:
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - DEBUG=true
@@ -111,9 +109,7 @@ services:
       dockerfile: Dockerfile
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
-    # Modern Docker Compose env_file configuration
-    env_file:
-      - .env
+    # Environment variables with sensible defaults (env_file optional)
     environment:
       - NODE_ENV=development
       # DRY/SOLID: Use centralized URLs from .env (single source of truth)
