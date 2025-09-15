@@ -31,26 +31,26 @@ services:
     env_file:
       - .env
     environment:
-      - ENVIRONMENT=${ENVIRONMENT}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
       - DEBUG=true
-      - LOG_LEVEL=${BACKEND_LOG_LEVEL}
-      - SECRET_KEY=${SECRET_KEY}
+      - LOG_LEVEL=${BACKEND_LOG_LEVEL:-DEBUG}
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-not-for-production}
       - RELOAD_ON_CHANGE=true
       # DRY/SOLID: Use fixed service names for development 
       - REDIS_SERVICE_NAME=redis-dev
       - POSTGRES_SERVICE_NAME=postgres-dev
-      - POSTGRES_DATABASE=${POSTGRES_DB}
-      - DATABASE_URL=${DATABASE_URL}
-      - REDIS_URL=${REDIS_URL}
+      - POSTGRES_DATABASE=${POSTGRES_DB:-csfrace_dev}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:dev-password@postgres-dev:5432/csfrace_dev}
+      - REDIS_URL=${REDIS_URL:-redis://redis-dev:6379/0}
       - CACHE_BACKEND=redis
       - REDIS_HOST=redis-dev
       - REDIS_PORT=6379
       - REDIS_DB=0
-      - SCRAPER_CONCURRENT_REQUESTS=${SCRAPER_CONCURRENT_REQUESTS}
-      - SCRAPER_REQUEST_TIMEOUT=${SCRAPER_REQUEST_TIMEOUT}
-      - SCRAPER_MAX_RETRIES=${SCRAPER_MAX_RETRIES}
-      - ENABLE_CORS=${ENABLE_CORS}
-      - CORS_ORIGINS=${CORS_ORIGINS}
+      - SCRAPER_CONCURRENT_REQUESTS=${SCRAPER_CONCURRENT_REQUESTS:-10}
+      - SCRAPER_REQUEST_TIMEOUT=${SCRAPER_REQUEST_TIMEOUT:-30}
+      - SCRAPER_MAX_RETRIES=${SCRAPER_MAX_RETRIES:-3}
+      - ENABLE_CORS=${ENABLE_CORS:-true}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       - ENABLE_DEBUG_TOOLBAR=true
       # OAuth2 Configuration (DRY: from centralized .env)
       - OAUTH_GOOGLE_CLIENT_ID=${OAUTH_GOOGLE_CLIENT_ID:-}
@@ -63,11 +63,11 @@ services:
       - OAUTH_FACEBOOK_CLIENT_SECRET=${OAUTH_FACEBOOK_CLIENT_SECRET:-your-facebook-app-secret}
       - OAUTH_APPLE_CLIENT_ID=${OAUTH_APPLE_CLIENT_ID:-your-apple-service-id}
       - OAUTH_APPLE_CLIENT_SECRET=${OAUTH_APPLE_CLIENT_SECRET:-your-apple-client-secret}
-      - OAUTH_REDIRECT_URI_BASE=${OAUTH_REDIRECT_URI_BASE}
+      - OAUTH_REDIRECT_URI_BASE=${OAUTH_REDIRECT_URI_BASE:-http://localhost:8000/auth}
       # WebAuthn Configuration (DRY: from centralized .env)
-      - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID}
-      - WEBAUTHN_RP_NAME=${WEBAUTHN_RP_NAME}
-      - WEBAUTHN_ORIGIN=${WEBAUTHN_ORIGIN}
+      - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID:-localhost}
+      - WEBAUTHN_RP_NAME=${WEBAUTHN_RP_NAME:-CSFrace Development}
+      - WEBAUTHN_ORIGIN=${WEBAUTHN_ORIGIN:-http://localhost:8000}
       - PYTEST_TIMEOUT=60
       - UV_CACHE_DIR=/tmp/.uv-cache
       - PYTHONPATH=/build/src
@@ -98,7 +98,7 @@ services:
     restart: unless-stopped
     # DRY/SOLID: Health check using environment variables
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${BACKEND_PORT}${BACKEND_HEALTH_ENDPOINT}')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:${BACKEND_PORT:-8000}${BACKEND_HEALTH_ENDPOINT:-/health}')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -117,11 +117,11 @@ services:
     environment:
       - NODE_ENV=development
       # DRY/SOLID: Use centralized URLs from .env (single source of truth)
-      - VITE_API_URL=${FRONTEND_API_URL}
-      - PUBLIC_API_URL=${FRONTEND_API_URL}
-      - REACT_APP_API_URL=${FRONTEND_API_URL}
+      - VITE_API_URL=${FRONTEND_API_URL:-http://localhost:8000}
+      - PUBLIC_API_URL=${FRONTEND_API_URL:-http://localhost:8000}
+      - REACT_APP_API_URL=${FRONTEND_API_URL:-http://localhost:8000}
       # Server-side API URL for Docker internal networking
-      - VITE_SERVER_API_URL=${FRONTEND_SERVER_API_URL}
+      - VITE_SERVER_API_URL=${FRONTEND_SERVER_API_URL:-http://backend-dev:8000}
       - REACT_APP_API_TIMEOUT=${FRONTEND_API_TIMEOUT:-30000}
       - REACT_APP_THEME=${FRONTEND_THEME:-light}
       - REACT_APP_MONITORING_ENABLED=true
@@ -143,7 +143,7 @@ services:
     restart: unless-stopped
     # DRY/SOLID: Health check using environment variables
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:${FRONTEND_PORT}${FRONTEND_HEALTH_ENDPOINT}"]
+      test: ["CMD", "curl", "-f", "http://localhost:${FRONTEND_PORT:-3000}${FRONTEND_HEALTH_ENDPOINT:-/}"]
       interval: 60s
       timeout: 10s
       retries: 2
@@ -151,11 +151,11 @@ services:
 
   # PostgreSQL - Development Database (DRY/SOLID: Fixed service name for development)
   postgres-dev:
-    image: postgres:${POSTGRES_VERSION}
+    image: postgres:${POSTGRES_VERSION:-15-alpine}
     environment:
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-csfrace_dev}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-dev-password}
       - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C --data-checksums
       # Development: Enable debug logging and statistics
       - POSTGRES_SHARED_PRELOAD_LIBRARIES=pg_stat_statements
@@ -201,7 +201,7 @@ services:
 
   # Redis - Development Cache (DRY/SOLID: Fixed service name for development)
   redis-dev:
-    image: redis:${REDIS_VERSION}
+    image: redis:${REDIS_VERSION:-7-alpine}
     command: [
       "redis-server",
       "--appendonly", "yes",           # Enable AOF persistence
@@ -237,7 +237,7 @@ services:
 
   # Prometheus - Development Monitoring (DRY/SOLID: Fixed service name for development)
   prometheus-dev:
-    image: prom/prometheus:${PROMETHEUS_VERSION}
+    image: prom/prometheus:${PROMETHEUS_VERSION:-v2.48.0}
     ports:
       - "${PROMETHEUS_PORT:-9090}:9090"
     volumes:
@@ -273,7 +273,7 @@ services:
 
   # Grafana - Development Dashboard (DRY/SOLID: Fixed service name for development)
   grafana-dev:
-    image: grafana/grafana-enterprise:${GRAFANA_VERSION}
+    image: grafana/grafana-enterprise:${GRAFANA_VERSION:-10.2.0}
     ports:
       - "${GRAFANA_PORT:-3001}:3000"
     environment:
@@ -286,7 +286,7 @@ services:
       - GF_INSTALL_PLUGINS=${GRAFANA_DEV_PLUGINS:-grafana-piechart-panel,grafana-worldmap-panel}
       # Development logging
       - GF_LOG_LEVEL=debug
-      - GF_SERVER_ROOT_URL=${GRAFANA_PUBLIC_URL}
+      - GF_SERVER_ROOT_URL=${GRAFANA_PUBLIC_URL:-http://localhost:3001}
     volumes:
       # Official recommendation: use named volumes for persistent storage
       - grafana-dev-data:/var/lib/grafana
@@ -336,7 +336,7 @@ services:
     ports:
       - "8081:8081"
     environment:
-      - REDIS_HOSTS=local:redis-dev:${REDIS_PORT}
+      - REDIS_HOSTS=local:redis-dev:${REDIS_PORT:-6379}
       - HTTP_USER=${REDIS_COMMANDER_USER:-admin}
       - HTTP_PASSWORD=${REDIS_COMMANDER_PASSWORD:-admin}
     depends_on:
