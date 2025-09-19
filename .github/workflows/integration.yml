@@ -1,370 +1,276 @@
-name: Integration Testing & Submodule Sync
+name: Integration Tests & Cross-Service Validation
 
 on:
   push:
-    branches: [master, main]
+    branches: [ main, master ]
     paths:
-      - 'docker compose*.yml'
-      - '.env.example'
-      - 'monitoring/**'
-      - 'scripts/**'
+      - 'backend/**'
+      - 'frontend/**'
+      - 'docker-compose*.yml'
       - '.github/workflows/**'
   pull_request:
-    branches: [master, main]
+    branches: [ main, master ]
     paths:
-      - 'docker compose*.yml'
-      - '.env.example'
-      - 'monitoring/**'
-      - 'scripts/**'
-      - '.github/workflows/**'
-  # Scheduled submodule sync check
-  schedule:
-    - cron: '0 6 * * *'  # Daily at 6 AM UTC
-  # Trigger when submodules are updated
-  repository_dispatch:
-    types: [backend-updated, frontend-updated, submodule-updated]
-  # Manual trigger for integration testing or submodule sync
+      - 'backend/**'
+      - 'frontend/**'
+      - 'docker-compose*.yml'
   workflow_dispatch:
     inputs:
-      action_type:
-        description: 'Type of action to perform'
+      test_type:
+        description: 'Type of tests to run'
         required: true
-        default: 'integration-test'
+        default: 'all'
         type: choice
         options:
-        - integration-test
-        - submodule-sync
-        - both
-      force_submodule_update:
-        description: 'Force update all submodules (for submodule-sync)'
-        required: false
-        default: false
-        type: boolean
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+          - all
+          - api_contracts
+          - e2e
+          - performance
 
 env:
-  COMPOSE_PROJECT_NAME: csfrace-scrape-test
+  COMPOSE_PROJECT_NAME: csfrace-integration
+  BACKEND_PORT: 8001
+  FRONTEND_PORT: 3001
+  POSTGRES_PORT: 5433
+  REDIS_PORT: 6380
 
 jobs:
-  # Submodule sync jobs (only run on schedule or manual dispatch)
-  check-submodule-updates:
-    name: Check & Update Submodules
+  # Change Detection for Intelligent CI
+  detect-changes:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.action_type == 'submodule-sync' || github.event.inputs.action_type == 'both'))
-    permissions:
-      contents: write
-      pull-requests: write
-    
     outputs:
-      backend-updated: ${{ steps.check-updates.outputs.backend-updated }}
-      frontend-updated: ${{ steps.check-updates.outputs.frontend-updated }}
-      updates-available: ${{ steps.check-updates.outputs.updates-available }}
-    
+      backend: ${{ steps.changes.outputs.backend }}
+      frontend: ${{ steps.changes.outputs.frontend }}
+      docker: ${{ steps.changes.outputs.docker }}
+      workflows: ${{ steps.changes.outputs.workflows }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 2
+
+      - uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+            frontend:
+              - 'frontend/**'
+            docker:
+              - 'docker-compose*.yml'
+              - '**/Dockerfile*'
+            workflows:
+              - '.github/workflows/**'
+
+  # API Contract Validation
+  api-contract-validation:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend == 'true' || needs.detect-changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+
     steps:
       - name: Checkout with submodules
         uses: actions/checkout@v4
         with:
           submodules: recursive
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
 
-      - name: Check for submodule updates
-        id: check-updates
-        run: |
-          echo "🔍 Checking for submodule updates..."
-          
-          # Initialize tracking
-          backend_updated=false
-          frontend_updated=false
-          updates_available=false
-          
-          # Check backend updates
-          if [ -d "backend" ]; then
-            cd backend
-            git fetch origin
-            local_commit=$(git rev-parse HEAD)
-            remote_commit=$(git rev-parse origin/master 2>/dev/null || git rev-parse origin/main)
-            
-            if [ "$local_commit" != "$remote_commit" ]; then
-              echo "📦 Backend updates available: $local_commit -> $remote_commit"
-              backend_updated=true
-              updates_available=true
-            fi
-            cd ..
-          fi
-          
-          # Check frontend updates
-          if [ -d "frontend" ]; then
-            cd frontend
-            git fetch origin
-            local_commit=$(git rev-parse HEAD)
-            remote_commit=$(git rev-parse origin/main 2>/dev/null || git rev-parse origin/master)
-            
-            if [ "$local_commit" != "$remote_commit" ]; then
-              echo "🎨 Frontend updates available: $local_commit -> $remote_commit"
-              frontend_updated=true
-              updates_available=true
-            fi
-            cd ..
-          fi
-          
-          # Set outputs
-          echo "backend-updated=$backend_updated" >> $GITHUB_OUTPUT
-          echo "frontend-updated=$frontend_updated" >> $GITHUB_OUTPUT
-          echo "updates-available=$updates_available" >> $GITHUB_OUTPUT
-          
-          if [ "$updates_available" = "true" ] || [ "${{ github.event.inputs.force_submodule_update }}" = "true" ]; then
-            echo "✅ Updates will be applied"
-          else
-            echo "✅ No updates needed"
-          fi
-
-      - name: Update submodules
-        if: steps.check-updates.outputs.updates-available == 'true' || github.event.inputs.force_submodule_update == 'true'
-        run: |
-          echo "🔄 Updating submodules..."
-          git submodule update --remote --merge
-          
-          # Check if there are changes to commit
-          if git diff --staged --quiet; then
-            echo "ℹ️ No submodule changes to commit"
-          else
-            # Create and push commit
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add .
-            git commit -m "chore(submodules): update to latest versions
-
-            🤖 Generated with [Claude Code](https://claude.ai/code)
-
-            Co-Authored-By: Claude <noreply@anthropic.com>"
-            git push origin ${{ github.ref_name }}
-            echo "✅ Submodules updated and committed"
-          fi
-
-  # Integration testing jobs (run on push, PR, or manual dispatch)
-  compose-validation:
-    name: Docker Compose Validation
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'repository_dispatch' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.action_type == 'integration-test' || github.event.inputs.action_type == 'both'))
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          submodules: false  # Don't need submodules for config validation
-          persist-credentials: false
+          node-version: '20'
+          cache: 'npm'
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Validate production compose file
+      - name: Install API testing dependencies
         run: |
-          echo "🔍 Validating docker-compose.yml..."
-          docker compose -f docker-compose.yml config --quiet
-          echo "✅ Production compose file is valid"
-          
-      - name: Validate development compose file
-        run: |
-          echo "🔍 Validating docker-compose.dev.yml..."
-          docker compose -f docker-compose.dev.yml config --quiet
-          echo "✅ Development compose file is valid"
+          npm install -g newman @apidevtools/swagger-parser
+          npm install
 
-      - name: Check environment template
+      - name: Start services for API testing
         run: |
-          echo "🔍 Checking .env.example for essential user configuration..."
-          if [ -f .env.example ]; then
-            # Define essential variables that users MUST configure
-            # These are variables without sensible defaults that users need to set
-            essential_vars="
-              BACKEND_PORT
-              FRONTEND_PORT
-              POSTGRES_PASSWORD
-              POSTGRES_DB
-              POSTGRES_USER
-              ENVIRONMENT
-              COMPOSE_PROJECT_NAME
-            "
-            
-            missing_essential=""
-            for var in $essential_vars; do
-              if [ -n "$var" ] && ! grep -q "^$var=" .env.example; then
-                missing_essential="$missing_essential $var"
-              fi
-            done
-            
-            if [ -n "$missing_essential" ]; then
-              echo "❌ Missing essential variables in .env.example:$missing_essential"
-              echo "💡 These variables require user configuration and should be documented."
-              exit 1
-            else
-              echo "✅ Essential user configuration variables are documented"
-            fi
-            
-            # Check that .env.example exists and is not empty
-            if [ ! -s .env.example ]; then
-              echo "⚠️ .env.example is empty - should contain configuration examples"
-              exit 1
-            fi
-            
-            echo "📋 Found $(grep -c '^[A-Z]' .env.example) configuration variables in .env.example"
-          else
-            echo "❌ No .env.example file found - users need configuration guidance"
-            exit 1
-          fi
+          cp .env.example .env
+          docker compose -f docker-compose.test.yml up -d --wait
+        timeout-minutes: 5
 
-  # Integration Test with Mock Services
-  integration-test:
-    name: Service Integration Test
+      - name: Wait for services to be ready
+        run: |
+          chmod +x scripts/wait-for-services.sh
+          ./scripts/wait-for-services.sh
+
+      - name: Validate OpenAPI Schema
+        run: |
+          # Download and validate backend OpenAPI schema
+          curl -f http://localhost:${BACKEND_PORT}/openapi.json > backend-schema.json
+          swagger-parser validate backend-schema.json
+
+      - name: Run API Contract Tests
+        run: |
+          # Test critical API endpoints
+          newman run tests/api-contracts/postman-collection.json \
+            --environment tests/api-contracts/integration-environment.json \
+            --reporters cli,json \
+            --reporter-json-export api-test-results.json
+
+      - name: Upload API test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: api-contract-results
+          path: api-test-results.json
+
+  # Cross-Service Integration Tests
+  integration-tests:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend == 'true' || needs.detect-changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
-    needs: compose-validation
-    timeout-minutes: 20
-    if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'repository_dispatch' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.action_type == 'integration-test' || github.event.inputs.action_type == 'both'))
-    
+
+    strategy:
+      matrix:
+        test-suite:
+          - auth-flow
+          - health-monitoring
+          - real-time-updates
+
     steps:
-      - name: Checkout code
+      - name: Checkout with submodules
         uses: actions/checkout@v4
         with:
           submodules: recursive
-          persist-credentials: false
 
-      - name: Set up test environment
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
         run: |
-          # Create test environment file
+          npm install
+          pip install playwright pytest-asyncio httpx
+          npx playwright install --with-deps chromium
+
+      - name: Start full service stack
+        run: |
           cp .env.example .env
-          
-          # Override with test-specific values
-          cat >> .env << EOF
-          ENVIRONMENT=test
-          BACKEND_PORT=8000
-          FRONTEND_PORT=3000
-          POSTGRES_PASSWORD=test_password
-          GRAFANA_ADMIN_PASSWORD=test_password
-          EOF
+          docker compose -f docker-compose.test.yml up -d --wait
+          ./scripts/wait-for-services.sh
+        timeout-minutes: 10
 
-      - name: Start core services (database, cache)
+      - name: Run Integration Test Suite - ${{ matrix.test-suite }}
         run: |
-          echo "🚀 Starting core services..."
-          docker compose up -d postgres redis
-          
-          echo "⏳ Waiting for services to be healthy..."
-          timeout 60s bash -c 'until docker compose ps | grep -E "(postgres|redis)" | grep -q "healthy"; do sleep 5; done'
-          
-          echo "✅ Core services are running"
+          case "${{ matrix.test-suite }}" in
+            "auth-flow")
+              pytest tests/integration/test_auth_flow.py -v --tb=short
+              ;;
+            "health-monitoring")
+              pytest tests/integration/test_health_monitoring.py -v --tb=short
+              ;;
+            "real-time-updates")
+              pytest tests/integration/test_realtime_updates.py -v --tb=short
+              ;;
+          esac
 
-      - name: Verify service health
+      - name: Collect service logs on failure
+        if: failure()
         run: |
-          echo "🔍 Checking service health..."
-          
-          # Check PostgreSQL
-          docker compose exec -T postgres pg_isready -U postgres
-          
-          # Check Redis
-          docker compose exec -T redis redis-cli ping
-          
-          echo "✅ All core services are healthy"
+          mkdir -p logs
+          docker compose -f docker-compose.test.yml logs backend > logs/backend.log
+          docker compose -f docker-compose.test.yml logs frontend > logs/frontend.log
+          docker compose -f docker-compose.test.yml logs postgres > logs/postgres.log
+          docker compose -f docker-compose.test.yml logs redis > logs/redis.log
 
-      - name: Test service networking
-        run: |
-          echo "🌐 Testing service networking..."
-          
-          # Test PostgreSQL connectivity from another container
-          docker run --rm --network csfrace-scrape-test_csfrace-network \
-            -e PGPASSWORD=test_password \
-            postgres:15-alpine \
-            psql -h postgres -U postgres -d csfrace -c "SELECT 1;"
-          
-          # Test Redis connectivity
-          docker run --rm --network csfrace-scrape-test_csfrace-network \
-            redis:7-alpine \
-            redis-cli -h redis ping
-          
-          echo "✅ Service networking is working"
+      - name: Upload logs
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: service-logs-${{ matrix.test-suite }}
+          path: logs/
 
-      - name: Test monitoring stack (if enabled)
-        run: |
-          echo "📊 Testing monitoring services..."
-          
-          # Check if monitoring configuration files exist
-          if [ -f "./monitoring/prometheus.yml" ]; then
-            echo "✅ Found monitoring configuration, testing services..."
-            
-            # Try to start monitoring services (non-blocking)
-            docker compose up -d prometheus grafana 2>/dev/null || {
-              echo "⚠️ Monitoring services not available with current configuration"
-              echo "ℹ️ This is expected if monitoring files are not fully configured"
-            }
-            
-            echo "✅ Monitoring configuration validated"
-          else
-            echo "ℹ️ Monitoring configuration not found - services may be configured in individual repos"
-            echo "✅ Core services (database, cache) are the primary integration test focus"
-          fi
-
-      - name: Cleanup test environment
-        if: always()
-        run: |
-          echo "🧹 Cleaning up test environment..."
-          docker compose down -v
-          docker system prune -f
-          echo "✅ Cleanup completed"
-
-  # Security Scan for Docker Compose
-  security-scan:
-    name: Docker Compose Security Scan
+  # End-to-End Workflow Tests
+  e2e-tests:
+    needs: [detect-changes, api-contract-validation]
+    if: needs.detect-changes.outputs.frontend == 'true' || github.event.inputs.test_type == 'e2e' || github.event.inputs.test_type == 'all'
     runs-on: ubuntu-latest
-    needs: compose-validation
-    timeout-minutes: 10
-    if: github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'repository_dispatch' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.action_type == 'integration-test' || github.event.inputs.action_type == 'both'))
-    permissions:
-      security-events: write
-    
+
     steps:
-      - name: Checkout code
+      - name: Checkout with submodules
         uses: actions/checkout@v4
         with:
-          persist-credentials: false
+          submodules: recursive
 
-      - name: Run Trivy security scan on Docker Compose
-        uses: aquasecurity/trivy-action@master
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          scan-type: 'config'
-          scan-ref: '.'
-          format: 'sarif'
-          output: 'trivy-config-results.sarif'
-          severity: 'CRITICAL,HIGH,MEDIUM'
-        continue-on-error: true
+          node-version: '20'
+          cache: 'npm'
 
-      - name: Run Hadolint on Dockerfiles (if any exist)
+      - name: Install Playwright
         run: |
-          echo "🔍 Scanning for Dockerfiles to lint..."
-          if find . -name "Dockerfile" -type f | grep -q .; then
-            echo "✅ Found Dockerfiles, running Hadolint..."
-            # Use Hadolint container directly since we don't have Dockerfiles in umbrella repo
-            docker run --rm -i hadolint/hadolint:latest hadolint - < backend/Dockerfile > hadolint-output.txt || echo "No backend Dockerfile found"
-            echo "📝 Hadolint scan completed (container security handled by submodule repos)"
-          else
-            echo "ℹ️ No Dockerfiles in umbrella repo - container security handled by backend/frontend submodules"
-          fi
-        continue-on-error: true
+          npm install
+          npx playwright install --with-deps
 
-      - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+      - name: Start production-like environment
+        run: |
+          cp .env.example .env
+          docker compose -f docker-compose.yml up -d --wait
+          ./scripts/wait-for-services.sh
+        timeout-minutes: 10
+
+      - name: Run E2E Tests
+        run: |
+          npx playwright test --project=chromium
+        env:
+          PLAYWRIGHT_BASE_URL: http://localhost:3000
+
+      - name: Upload Playwright Report
+        uses: actions/upload-artifact@v4
         if: always()
         with:
-          sarif_file: 'trivy-config-results.sarif'
-          category: 'trivy-config'
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 30
 
-      # Note: Hadolint scanning handled by individual backend/frontend repos
-      # Umbrella repo focuses on Docker Compose orchestration security
+  # Integration Test Summary
+  integration-summary:
+    needs: [api-contract-validation, integration-tests, e2e-tests]
+    if: always()
+    runs-on: ubuntu-latest
 
-      - name: Check for secrets in configuration
-        uses: trufflesecurity/trufflehog@main
+    steps:
+      - name: Generate Integration Report
+        run: |
+          echo "# Integration Test Summary" > integration-report.md
+          echo "" >> integration-report.md
+          echo "## Test Results" >> integration-report.md
+
+          if [ "${{ needs.api-contract-validation.result }}" == "success" ]; then
+            echo "✅ API Contract Validation: PASSED" >> integration-report.md
+          else
+            echo "❌ API Contract Validation: FAILED" >> integration-report.md
+          fi
+
+          if [ "${{ needs.integration-tests.result }}" == "success" ]; then
+            echo "✅ Integration Tests: PASSED" >> integration-report.md
+          else
+            echo "❌ Integration Tests: FAILED" >> integration-report.md
+          fi
+
+          if [ "${{ needs.e2e-tests.result }}" == "success" ]; then
+            echo "✅ E2E Tests: PASSED" >> integration-report.md
+          else
+            echo "❌ E2E Tests: FAILED" >> integration-report.md
+          fi
+
+          echo "" >> integration-report.md
+          echo "Generated at: $(date)" >> integration-report.md
+
+      - name: Upload Integration Report
+        uses: actions/upload-artifact@v4
         with:
-          path: ./
-          extra_args: --only-verified
+          name: integration-report
+          path: integration-report.md

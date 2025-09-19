@@ -1,0 +1,61 @@
+{
+  "id": "integration-environment",
+  "name": "Integration Testing Environment",
+  "values": [
+    {
+      "key": "BACKEND_URL",
+      "value": "http://localhost:8001",
+      "description": "Backend API base URL for integration testing",
+      "enabled": true
+    },
+    {
+      "key": "FRONTEND_URL",
+      "value": "http://localhost:3001",
+      "description": "Frontend application URL for integration testing",
+      "enabled": true
+    },
+    {
+      "key": "TEST_TIMEOUT",
+      "value": "30000",
+      "description": "Default timeout for API requests in milliseconds",
+      "enabled": true
+    },
+    {
+      "key": "EXPECTED_API_VERSION",
+      "value": "1.0.0",
+      "description": "Expected API version for contract validation",
+      "enabled": true
+    },
+    {
+      "key": "CORS_ORIGIN",
+      "value": "http://localhost:3001",
+      "description": "Expected CORS origin for preflight tests",
+      "enabled": true
+    },
+    {
+      "key": "AUTH_PROVIDER_COUNT",
+      "value": "2",
+      "description": "Expected number of OAuth providers (Google, GitHub)",
+      "enabled": true
+    },
+    {
+      "key": "MAX_RESPONSE_TIME",
+      "value": "2000",
+      "description": "Maximum acceptable response time in milliseconds",
+      "enabled": true
+    },
+    {
+      "key": "TEST_USER_EMAIL",
+      "value": "test@example.com",
+      "description": "Test user email for authenticated endpoint testing",
+      "enabled": false
+    },
+    {
+      "key": "TEST_SCRAPING_URL",
+      "value": "https://httpbin.org/html",
+      "description": "Safe test URL for scraping functionality tests",
+      "enabled": true
+    }
+  ],
+  "_postman_variable_scope": "environment"
+}

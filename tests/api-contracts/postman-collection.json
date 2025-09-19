@@ -1,0 +1,362 @@
+{
+  "info": {
+    "name": "CSFrace API Contract Tests",
+    "description": "Comprehensive API contract validation for CSFrace backend services",
+    "version": "1.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "{{BACKEND_URL}}",
+      "type": "string"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{authToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Health Check",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Health check returns 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Health check response has correct structure', function () {",
+              "    const response = pm.response.json();",
+              "    pm.expect(response).to.have.property('status');",
+              "    pm.expect(response.status).to.eql('healthy');",
+              "    pm.expect(response).to.have.property('timestamp');",
+              "    pm.expect(response).to.have.property('version');",
+              "});",
+              "",
+              "pm.test('Response time is acceptable', function () {",
+              "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health/",
+          "host": ["{{baseUrl}}"],
+          "path": ["health", ""]
+        }
+      }
+    },
+    {
+      "name": "OpenAPI Schema",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('OpenAPI schema returns 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('OpenAPI schema is valid JSON', function () {",
+              "    pm.response.to.be.json;",
+              "});",
+              "",
+              "pm.test('OpenAPI schema has required fields', function () {",
+              "    const schema = pm.response.json();",
+              "    pm.expect(schema).to.have.property('openapi');",
+              "    pm.expect(schema).to.have.property('info');",
+              "    pm.expect(schema).to.have.property('paths');",
+              "    pm.expect(schema.info).to.have.property('title');",
+              "    pm.expect(schema.info).to.have.property('version');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/openapi.json",
+          "host": ["{{baseUrl}}"],
+          "path": ["openapi.json"]
+        }
+      }
+    },
+    {
+      "name": "API Documentation",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('API docs returns 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('API docs contains HTML', function () {",
+              "    pm.expect(pm.response.text()).to.include('<!DOCTYPE html>');",
+              "    pm.expect(pm.response.text()).to.include('swagger');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/docs",
+          "host": ["{{baseUrl}}"],
+          "path": ["docs"]
+        }
+      }
+    },
+    {
+      "name": "Auth - OAuth Providers",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('OAuth providers endpoint returns 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('OAuth providers response structure', function () {",
+              "    const response = pm.response.json();",
+              "    pm.expect(response).to.be.an('object');",
+              "    pm.expect(response).to.have.property('providers');",
+              "    pm.expect(response.providers).to.be.an('array');",
+              "});",
+              "",
+              "pm.test('OAuth providers contains expected providers', function () {",
+              "    const response = pm.response.json();",
+              "    const providerNames = response.providers.map(p => p.name);",
+              "    pm.expect(providerNames).to.include('google');",
+              "    pm.expect(providerNames).to.include('github');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/auth/providers",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "providers"]
+        }
+      }
+    },
+    {
+      "name": "Auth - Google OAuth URL",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Google OAuth URL endpoint returns 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Google OAuth URL response structure', function () {",
+              "    const response = pm.response.json();",
+              "    pm.expect(response).to.have.property('authorization_url');",
+              "    pm.expect(response).to.have.property('state');",
+              "    pm.expect(response.authorization_url).to.include('accounts.google.com');",
+              "    pm.expect(response.authorization_url).to.include('oauth2');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/auth/google/authorize",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "google", "authorize"]
+        }
+      }
+    },
+    {
+      "name": "Scraper - Submit Scraping Job",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "// Skip auth for now in contract testing",
+              "// In real integration tests, this would require authentication"
+            ],
+            "type": "text/javascript"
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "// Note: This test expects 401 (unauthorized) since we're not authenticated",
+              "// The contract test verifies the endpoint exists and responds appropriately",
+              "pm.test('Scraping job endpoint exists and requires auth', function () {",
+              "    // Accept both 401 (unauthorized) and 422 (validation error) as valid responses",
+              "    pm.expect([401, 422]).to.include(pm.response.code);",
+              "});",
+              "",
+              "if (pm.response.code === 422) {",
+              "    pm.test('Validation error has correct structure', function () {",
+              "        const response = pm.response.json();",
+              "        pm.expect(response).to.have.property('detail');",
+              "    });",
+              "}",
+              "",
+              "if (pm.response.code === 401) {",
+              "    pm.test('Unauthorized error has correct structure', function () {",
+              "        const response = pm.response.json();",
+              "        pm.expect(response).to.have.property('detail');",
+              "    });",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"url\": \"https://example.com\",\n  \"options\": {\n    \"format\": \"html\",\n    \"include_images\": false,\n    \"timeout\": 30\n  }\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/scraper/jobs",
+          "host": ["{{baseUrl}}"],
+          "path": ["scraper", "jobs"]
+        }
+      }
+    },
+    {
+      "name": "Metrics - System Metrics",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Metrics endpoint returns 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('Metrics response is text format', function () {",
+              "    pm.expect(pm.response.headers.get('Content-Type')).to.include('text/plain');",
+              "});",
+              "",
+              "pm.test('Metrics contains Prometheus format', function () {",
+              "    const text = pm.response.text();",
+              "    pm.expect(text).to.include('# HELP');",
+              "    pm.expect(text).to.include('# TYPE');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/metrics",
+          "host": ["{{baseUrl}}"],
+          "path": ["metrics"]
+        }
+      }
+    },
+    {
+      "name": "CORS Preflight",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('CORS preflight returns 200', function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test('CORS headers are present', function () {",
+              "    pm.expect(pm.response.headers.has('access-control-allow-origin')).to.be.true;",
+              "    pm.expect(pm.response.headers.has('access-control-allow-methods')).to.be.true;",
+              "    pm.expect(pm.response.headers.has('access-control-allow-headers')).to.be.true;",
+              "});",
+              "",
+              "pm.test('CORS allows expected methods', function () {",
+              "    const allowedMethods = pm.response.headers.get('access-control-allow-methods');",
+              "    pm.expect(allowedMethods).to.include('GET');",
+              "    pm.expect(allowedMethods).to.include('POST');",
+              "    pm.expect(allowedMethods).to.include('PUT');",
+              "    pm.expect(allowedMethods).to.include('DELETE');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "OPTIONS",
+        "header": [
+          {
+            "key": "Origin",
+            "value": "http://localhost:3001"
+          },
+          {
+            "key": "Access-Control-Request-Method",
+            "value": "POST"
+          },
+          {
+            "key": "Access-Control-Request-Headers",
+            "value": "Content-Type, Authorization"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/providers",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "providers"]
+        }
+      }
+    }
+  ]
+}
