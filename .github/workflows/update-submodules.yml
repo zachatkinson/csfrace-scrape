@@ -32,12 +32,21 @@ jobs:
       actions: read
       
     steps:
-      - name: Checkout with submodules
+      - name: Checkout repository only (no submodules)
         uses: actions/checkout@v4
         with:
-          submodules: recursive
           token: ${{ secrets.SUBMODULE_UPDATE_TOKEN }}
           fetch-depth: 0
+
+      - name: Initialize submodules safely
+        run: |
+          echo "🔧 Initializing submodules without updating..."
+          git submodule init
+
+          # Checkout submodules at their current committed versions (no update)
+          git submodule update --init
+
+          echo "✅ Submodules initialized at committed versions"
 
       - name: Configure Git
         run: |
