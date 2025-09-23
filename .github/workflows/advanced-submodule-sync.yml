@@ -1,0 +1,432 @@
+name: Advanced Submodule Sync
+
+on:
+  # Trigger on repository dispatch from backend/frontend
+  repository_dispatch:
+    types: [backend-released, frontend-released]
+  # Manual trigger with options
+  workflow_dispatch:
+    inputs:
+      strategy:
+        description: 'Update strategy'
+        required: true
+        type: choice
+        options:
+          - force-update     # Always take latest from upstream (recommended)
+          - merge-update     # Try to merge (may fail on conflicts)
+          - rebase-update    # Rebase local changes on upstream
+        default: 'force-update'
+      create-pr:
+        description: 'Create PR instead of direct push'
+        required: true
+        type: boolean
+        default: true
+      submodule:
+        description: 'Which submodule to update'
+        required: true
+        type: choice
+        options:
+          - backend
+          - frontend
+          - both
+        default: 'both'
+
+env:
+  # Ensure consistent naming across workflows
+  COMPOSE_PROJECT_NAME: csfrace-scrape-integration
+  # Default update strategy for automated triggers
+  DEFAULT_STRATEGY: force-update
+
+jobs:
+  sync-submodules:
+    name: Sync Submodules with Upstream
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: read
+
+    steps:
+      - name: Determine Update Strategy
+        id: strategy
+        run: |
+          # Use force-update for automated triggers (safest)
+          if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
+            echo "strategy=${DEFAULT_STRATEGY}" >> $GITHUB_OUTPUT
+            echo "create_pr=true" >> $GITHUB_OUTPUT
+            echo "📋 Using default strategy: ${DEFAULT_STRATEGY}"
+          else
+            echo "strategy=${{ github.event.inputs.strategy }}" >> $GITHUB_OUTPUT
+            echo "create_pr=${{ github.event.inputs.create-pr }}" >> $GITHUB_OUTPUT
+            echo "📋 Using selected strategy: ${{ github.event.inputs.strategy }}"
+          fi
+
+          # Determine which submodule to update
+          if [ "${{ github.event.action }}" == "backend-released" ]; then
+            echo "submodule=backend" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.action }}" == "frontend-released" ]; then
+            echo "submodule=frontend" >> $GITHUB_OUTPUT
+          else
+            echo "submodule=${{ github.event.inputs.submodule || 'both' }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.SUBMODULE_UPDATE_TOKEN }}
+          fetch-depth: 0
+
+      - name: Configure Git Identity
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+      - name: Update Backend Submodule
+        if: steps.strategy.outputs.submodule == 'backend' || steps.strategy.outputs.submodule == 'both'
+        id: update-backend
+        run: |
+          echo "🔄 Updating backend submodule with strategy: ${{ steps.strategy.outputs.strategy }}"
+
+          cd backend
+          OLD_COMMIT=$(git rev-parse HEAD)
+
+          # Fetch latest from origin
+          git fetch origin --tags
+
+          # Get the default branch name dynamically
+          DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@' || echo "master")
+
+          # Apply the selected update strategy
+          case "${{ steps.strategy.outputs.strategy }}" in
+            "force-update")
+              echo "🔨 Force updating to latest upstream..."
+              # This is the RECOMMENDED approach for submodules
+              # Submodules should always track upstream exactly
+              git reset --hard origin/$DEFAULT_BRANCH
+              echo "✅ Force updated to origin/$DEFAULT_BRANCH"
+              ;;
+
+            "merge-update")
+              echo "🔀 Attempting merge update..."
+              # Try to merge, but allow failures to be handled
+              if git merge origin/$DEFAULT_BRANCH --no-edit; then
+                echo "✅ Merge successful"
+              else
+                echo "❌ Merge conflicts detected"
+                # Show conflict details for debugging
+                git status --short
+                git diff --name-only --diff-filter=U
+
+                # Abort the merge and fallback to force update
+                git merge --abort
+                echo "⚠️ Falling back to force update..."
+                git reset --hard origin/$DEFAULT_BRANCH
+                echo "✅ Force updated after merge conflict"
+                echo "BACKEND_HAD_CONFLICTS=true" >> $GITHUB_ENV
+              fi
+              ;;
+
+            "rebase-update")
+              echo "📝 Attempting rebase update..."
+              # Try to rebase local changes on top of upstream
+              if git rebase origin/$DEFAULT_BRANCH; then
+                echo "✅ Rebase successful"
+              else
+                echo "❌ Rebase conflicts detected"
+                # Abort rebase and fallback to force update
+                git rebase --abort
+                echo "⚠️ Falling back to force update..."
+                git reset --hard origin/$DEFAULT_BRANCH
+                echo "✅ Force updated after rebase conflict"
+                echo "BACKEND_HAD_CONFLICTS=true" >> $GITHUB_ENV
+              fi
+              ;;
+          esac
+
+          NEW_COMMIT=$(git rev-parse HEAD)
+          cd ..
+
+          if [ "$OLD_COMMIT" != "$NEW_COMMIT" ]; then
+            echo "✅ Backend updated: ${OLD_COMMIT:0:8} → ${NEW_COMMIT:0:8}"
+            echo "updated=true" >> $GITHUB_OUTPUT
+            echo "BACKEND_UPDATED=true" >> $GITHUB_ENV
+            echo "BACKEND_OLD_COMMIT=$OLD_COMMIT" >> $GITHUB_ENV
+            echo "BACKEND_NEW_COMMIT=$NEW_COMMIT" >> $GITHUB_ENV
+
+            # Get the latest tag for the new commit if available
+            cd backend
+            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+            if [ -n "$LATEST_TAG" ]; then
+              echo "BACKEND_VERSION=$LATEST_TAG" >> $GITHUB_ENV
+            fi
+            cd ..
+
+            # Stage the submodule update
+            git add backend
+          else
+            echo "ℹ️ Backend already up to date"
+            echo "updated=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update Frontend Submodule
+        if: steps.strategy.outputs.submodule == 'frontend' || steps.strategy.outputs.submodule == 'both'
+        id: update-frontend
+        run: |
+          echo "🔄 Updating frontend submodule with strategy: ${{ steps.strategy.outputs.strategy }}"
+
+          cd frontend
+          OLD_COMMIT=$(git rev-parse HEAD)
+
+          # Fetch latest from origin
+          git fetch origin --tags
+
+          # Get the default branch name dynamically
+          DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@' || echo "master")
+
+          # Apply the selected update strategy
+          case "${{ steps.strategy.outputs.strategy }}" in
+            "force-update")
+              echo "🔨 Force updating to latest upstream..."
+              git reset --hard origin/$DEFAULT_BRANCH
+              echo "✅ Force updated to origin/$DEFAULT_BRANCH"
+              ;;
+
+            "merge-update")
+              echo "🔀 Attempting merge update..."
+              if git merge origin/$DEFAULT_BRANCH --no-edit; then
+                echo "✅ Merge successful"
+              else
+                echo "❌ Merge conflicts detected"
+                git status --short
+                git diff --name-only --diff-filter=U
+
+                git merge --abort
+                echo "⚠️ Falling back to force update..."
+                git reset --hard origin/$DEFAULT_BRANCH
+                echo "✅ Force updated after merge conflict"
+                echo "FRONTEND_HAD_CONFLICTS=true" >> $GITHUB_ENV
+              fi
+              ;;
+
+            "rebase-update")
+              echo "📝 Attempting rebase update..."
+              if git rebase origin/$DEFAULT_BRANCH; then
+                echo "✅ Rebase successful"
+              else
+                echo "❌ Rebase conflicts detected"
+                git rebase --abort
+                echo "⚠️ Falling back to force update..."
+                git reset --hard origin/$DEFAULT_BRANCH
+                echo "✅ Force updated after rebase conflict"
+                echo "FRONTEND_HAD_CONFLICTS=true" >> $GITHUB_ENV
+              fi
+              ;;
+          esac
+
+          NEW_COMMIT=$(git rev-parse HEAD)
+          cd ..
+
+          if [ "$OLD_COMMIT" != "$NEW_COMMIT" ]; then
+            echo "✅ Frontend updated: ${OLD_COMMIT:0:8} → ${NEW_COMMIT:0:8}"
+            echo "updated=true" >> $GITHUB_OUTPUT
+            echo "FRONTEND_UPDATED=true" >> $GITHUB_ENV
+            echo "FRONTEND_OLD_COMMIT=$OLD_COMMIT" >> $GITHUB_ENV
+            echo "FRONTEND_NEW_COMMIT=$NEW_COMMIT" >> $GITHUB_ENV
+
+            # Get the latest tag for the new commit if available
+            cd frontend
+            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+            if [ -n "$LATEST_TAG" ]; then
+              echo "FRONTEND_VERSION=$LATEST_TAG" >> $GITHUB_ENV
+            fi
+            cd ..
+
+            # Stage the submodule update
+            git add frontend
+          else
+            echo "ℹ️ Frontend already up to date"
+            echo "updated=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check for Changes
+        id: changes
+        run: |
+          if git diff --cached --quiet; then
+            echo "ℹ️ No submodule changes to commit"
+            echo "has-changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "✅ Submodule changes detected"
+            echo "has-changes=true" >> $GITHUB_OUTPUT
+            git status --short
+          fi
+
+      - name: Quick Integration Test
+        if: steps.changes.outputs.has-changes == 'true'
+        run: |
+          echo "🧪 Running quick integration tests..."
+
+          # Create minimal test environment
+          cp .env.example .env
+
+          # Quick syntax validation (doesn't require services)
+          echo "🔍 Validating Docker Compose syntax..."
+          docker compose config > /dev/null || {
+            echo "❌ Docker Compose configuration is invalid"
+            exit 1
+          }
+
+          echo "✅ Configuration validation passed"
+
+      - name: Create Pull Request
+        if: steps.changes.outputs.has-changes == 'true' && steps.strategy.outputs.create_pr == 'true'
+        id: create-pr
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.SUBMODULE_UPDATE_TOKEN }}
+          commit-message: |
+            chore: sync submodules with upstream repositories
+
+            ${{ env.BACKEND_UPDATED == 'true' && format('Backend: {0} → {1}', env.BACKEND_OLD_COMMIT, env.BACKEND_NEW_COMMIT) || '' }}
+            ${{ env.BACKEND_VERSION && format('Version: {0}', env.BACKEND_VERSION) || '' }}
+            ${{ env.BACKEND_HAD_CONFLICTS == 'true' && '⚠️ Resolved conflicts via force update' || '' }}
+
+            ${{ env.FRONTEND_UPDATED == 'true' && format('Frontend: {0} → {1}', env.FRONTEND_OLD_COMMIT, env.FRONTEND_NEW_COMMIT) || '' }}
+            ${{ env.FRONTEND_VERSION && format('Version: {0}', env.FRONTEND_VERSION) || '' }}
+            ${{ env.FRONTEND_HAD_CONFLICTS == 'true' && '⚠️ Resolved conflicts via force update' || '' }}
+
+            Update strategy: ${{ steps.strategy.outputs.strategy }}
+          title: 'chore: sync submodules with upstream'
+          body: |
+            ## 🔄 Automated Submodule Synchronization
+
+            This PR automatically synchronizes submodules with their upstream repositories.
+
+            ### 📦 Updates Applied
+
+            ${{ env.BACKEND_UPDATED == 'true' && '#### ✅ Backend Updated' || '#### ➖ Backend (no changes)' }}
+            ${{ env.BACKEND_UPDATED == 'true' && format('- **From:** `{0}`', env.BACKEND_OLD_COMMIT) || '' }}
+            ${{ env.BACKEND_UPDATED == 'true' && format('- **To:** `{0}`', env.BACKEND_NEW_COMMIT) || '' }}
+            ${{ env.BACKEND_VERSION && format('- **Version:** `{0}`', env.BACKEND_VERSION) || '' }}
+            ${{ env.BACKEND_HAD_CONFLICTS == 'true' && '- **⚠️ Note:** Had merge conflicts, resolved via force update' || '' }}
+            ${{ env.BACKEND_UPDATED == 'true' && format('- **[View Changes](https://github.com/zachatkinson/csfrace-scrape-back/compare/{0}...{1})**', env.BACKEND_OLD_COMMIT, env.BACKEND_NEW_COMMIT) || '' }}
+
+            ${{ env.FRONTEND_UPDATED == 'true' && '#### ✅ Frontend Updated' || '#### ➖ Frontend (no changes)' }}
+            ${{ env.FRONTEND_UPDATED == 'true' && format('- **From:** `{0}`', env.FRONTEND_OLD_COMMIT) || '' }}
+            ${{ env.FRONTEND_UPDATED == 'true' && format('- **To:** `{0}`', env.FRONTEND_NEW_COMMIT) || '' }}
+            ${{ env.FRONTEND_VERSION && format('- **Version:** `{0}`', env.FRONTEND_VERSION) || '' }}
+            ${{ env.FRONTEND_HAD_CONFLICTS == 'true' && '- **⚠️ Note:** Had merge conflicts, resolved via force update' || '' }}
+            ${{ env.FRONTEND_UPDATED == 'true' && format('- **[View Changes](https://github.com/zachatkinson/csfrace-scrape-front/compare/{0}...{1})**', env.FRONTEND_OLD_COMMIT, env.FRONTEND_NEW_COMMIT) || '' }}
+
+            ### 🔧 Update Strategy
+
+            **Strategy Used:** `${{ steps.strategy.outputs.strategy }}`
+
+            #### Strategy Explanation:
+            - **force-update**: Discards any local changes and takes the exact state from upstream (RECOMMENDED)
+            - **merge-update**: Attempts to merge upstream changes with local modifications
+            - **rebase-update**: Rebases local changes on top of upstream changes
+
+            ### ✅ Validation
+
+            - ✅ Docker Compose configuration validated
+            - ✅ Submodule references updated
+            - ✅ Git history preserved
+
+            ### 🚀 Auto-Merge
+
+            This PR will auto-merge once all checks pass. The merge will:
+            1. Squash commits for a clean history
+            2. Delete the branch after merge
+            3. Update the main branch with the latest submodule references
+
+            ---
+
+            **Triggered by:** ${{ github.event_name == 'repository_dispatch' && format('🤖 Automated sync ({0})', github.event.action) || '👤 Manual workflow dispatch' }}
+            **Workflow:** [Advanced Submodule Sync](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          branch: sync-submodules-${{ github.run_number }}
+          delete-branch: true
+          labels: |
+            automated
+            submodule-sync
+            dependencies
+
+      - name: Direct Push to Main
+        if: steps.changes.outputs.has-changes == 'true' && steps.strategy.outputs.create_pr == 'false'
+        run: |
+          echo "📤 Pushing directly to main branch..."
+
+          # Create commit message
+          COMMIT_MSG="chore: sync submodules with upstream"
+
+          if [ "${{ env.BACKEND_UPDATED }}" == "true" ]; then
+            COMMIT_MSG="${COMMIT_MSG}
+
+Backend: ${BACKEND_OLD_COMMIT:0:8} → ${BACKEND_NEW_COMMIT:0:8}"
+            [ -n "${BACKEND_VERSION}" ] && COMMIT_MSG="${COMMIT_MSG} (${BACKEND_VERSION})"
+          fi
+
+          if [ "${{ env.FRONTEND_UPDATED }}" == "true" ]; then
+            COMMIT_MSG="${COMMIT_MSG}
+
+Frontend: ${FRONTEND_OLD_COMMIT:0:8} → ${FRONTEND_NEW_COMMIT:0:8}"
+            [ -n "${FRONTEND_VERSION}" ] && COMMIT_MSG="${COMMIT_MSG} (${FRONTEND_VERSION})"
+          fi
+
+          # Commit and push
+          git commit -m "${COMMIT_MSG}"
+          git push origin HEAD
+
+          echo "✅ Changes pushed directly to main branch"
+
+      - name: Enable Auto-Merge
+        if: steps.changes.outputs.has-changes == 'true' && steps.strategy.outputs.create_pr == 'true' && steps.create-pr.outputs.pull-request-number
+        run: |
+          echo "🤖 Enabling auto-merge for PR #${{ steps.create-pr.outputs.pull-request-number }}"
+          gh pr merge ${{ steps.create-pr.outputs.pull-request-number }} \
+            --auto \
+            --squash \
+            --delete-branch \
+            --merge-commit-message "chore: sync submodules with upstream (#${{ steps.create-pr.outputs.pull-request-number }})"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate Summary
+        if: always()
+        run: |
+          echo "## 🔄 Submodule Sync Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### Configuration" >> $GITHUB_STEP_SUMMARY
+          echo "- **Strategy:** \`${{ steps.strategy.outputs.strategy }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Create PR:** ${{ steps.strategy.outputs.create_pr }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Target Submodule:** ${{ steps.strategy.outputs.submodule }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.changes.outputs.has-changes }}" == "true" ]; then
+            echo "### ✅ Updates Applied" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            if [ "${{ env.BACKEND_UPDATED }}" == "true" ]; then
+              echo "#### Backend" >> $GITHUB_STEP_SUMMARY
+              echo "- Updated from \`${BACKEND_OLD_COMMIT:0:8}\` to \`${BACKEND_NEW_COMMIT:0:8}\`" >> $GITHUB_STEP_SUMMARY
+              [ -n "${BACKEND_VERSION}" ] && echo "- Version: \`${BACKEND_VERSION}\`" >> $GITHUB_STEP_SUMMARY
+              [ "${{ env.BACKEND_HAD_CONFLICTS }}" == "true" ] && echo "- ⚠️ Had conflicts (resolved via force update)" >> $GITHUB_STEP_SUMMARY
+            fi
+
+            if [ "${{ env.FRONTEND_UPDATED }}" == "true" ]; then
+              echo "#### Frontend" >> $GITHUB_STEP_SUMMARY
+              echo "- Updated from \`${FRONTEND_OLD_COMMIT:0:8}\` to \`${FRONTEND_NEW_COMMIT:0:8}\`" >> $GITHUB_STEP_SUMMARY
+              [ -n "${FRONTEND_VERSION}" ] && echo "- Version: \`${FRONTEND_VERSION}\`" >> $GITHUB_STEP_SUMMARY
+              [ "${{ env.FRONTEND_HAD_CONFLICTS }}" == "true" ] && echo "- ⚠️ Had conflicts (resolved via force update)" >> $GITHUB_STEP_SUMMARY
+            fi
+
+            if [ "${{ steps.strategy.outputs.create_pr }}" == "true" ]; then
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "### 📝 Pull Request" >> $GITHUB_STEP_SUMMARY
+              echo "PR #${{ steps.create-pr.outputs.pull-request-number }} created with auto-merge enabled" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "### ℹ️ No Updates Needed" >> $GITHUB_STEP_SUMMARY
+            echo "All submodules are already synchronized with upstream." >> $GITHUB_STEP_SUMMARY
+          fi

@@ -23,7 +23,7 @@ scrape_configs:
   # Backend API monitoring - development service names
   - job_name: 'csfrace-backend-dev'
     static_configs:
-      - targets: ['backend:8000']
+      - targets: ['backend-dev:8000']
     metrics_path: '/metrics'
     scrape_interval: 10s
     scrape_timeout: 5s

@@ -66,6 +66,9 @@ services:
       - OAUTH_APPLE_CLIENT_SECRET=${OAUTH_APPLE_CLIENT_SECRET:-your-apple-client-secret}
       - OAUTH_REDIRECT_URI_BASE=${OAUTH_REDIRECT_URI_BASE:-http://localhost:8000}
       
+      # Auth Token Configuration
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-720}
+      
       # WebAuthn Configuration
       - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID:-localhost}
       - WEBAUTHN_RP_NAME=${WEBAUTHN_RP_NAME:-CSFrace Backend}
@@ -106,8 +109,11 @@ services:
       - NODE_ENV=production
       # Astro will automatically load .env.production file
       # Override specific variables if needed for different deployments
-      - SERVER_API_BASE_URL=${FRONTEND_SERVER_API_URL:-http://backend:8000}  # Internal Docker network for Server Islands
+      - SERVER_API_BASE_URL=${FRONTEND_SERVER_API_URL:-http://host.docker.internal:8000}  # Host-accessible URL for server-side auth
       - PUBLIC_BACKEND_SSE_URL=${PUBLIC_BACKEND_SSE_URL:-http://localhost:8000}  # Client-side SSE connection (browser accessible)
+    extra_hosts:
+      # Docker best practice: enable host.docker.internal for server-side authentication
+      - "host.docker.internal:host-gateway"
     depends_on:
       backend:
         condition: service_healthy
@@ -283,7 +289,7 @@ services:
           memory: 256m
           cpus: '0.1'
 
-  # Nginx Reverse Proxy (Production)
+  # Nginx Reverse Proxy (CRITICAL: Required for routing and CORS)
   nginx:
     image: nginx:1.25-alpine
     ports:
@@ -298,5 +304,4 @@ services:
     networks:
       - csfrace-network
     restart: ${RESTART_POLICY:-unless-stopped}
-    profiles:
-      - production  # Only start with --profile production
+    # REMOVED profiles restriction - nginx is ESSENTIAL for routing

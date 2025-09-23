@@ -50,38 +50,80 @@ jobs:
           echo "🔄 Updating backend submodule..."
           cd backend
           OLD_COMMIT=$(git rev-parse HEAD)
-          cd ..
-          git submodule update --remote --merge backend
-          cd backend
+
+          # Fetch latest from origin
+          git fetch origin
+
+          # Get the latest commit from the default branch (master/main)
+          DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
+          LATEST_COMMIT=$(git rev-parse origin/$DEFAULT_BRANCH)
+
+          # Strategy 1: Try fast-forward merge first (cleanest approach)
+          echo "📍 Attempting fast-forward update..."
+          if git merge --ff-only origin/$DEFAULT_BRANCH 2>/dev/null; then
+            echo "✅ Fast-forward merge successful"
+          else
+            echo "⚠️ Fast-forward not possible, using reset strategy..."
+
+            # Strategy 2: Force update to latest (discards local changes)
+            # This is safe because submodules should track upstream exactly
+            git reset --hard origin/$DEFAULT_BRANCH
+            echo "✅ Force updated to latest commit"
+          fi
+
           NEW_COMMIT=$(git rev-parse HEAD)
           cd ..
-          
+
           if [ "$OLD_COMMIT" != "$NEW_COMMIT" ]; then
             echo "✅ Backend updated from $OLD_COMMIT to $NEW_COMMIT"
             echo "BACKEND_UPDATED=true" >> $GITHUB_ENV
             echo "BACKEND_OLD_COMMIT=$OLD_COMMIT" >> $GITHUB_ENV
             echo "BACKEND_NEW_COMMIT=$NEW_COMMIT" >> $GITHUB_ENV
+
+            # Stage the submodule change
+            git add backend
           else
             echo "ℹ️ Backend already up to date"
           fi
 
-      - name: Update Frontend Submodule  
+      - name: Update Frontend Submodule
         if: github.event.action == 'frontend-updated' || github.event.inputs.submodule == 'frontend' || github.event.inputs.submodule == 'both'
         run: |
           echo "🔄 Updating frontend submodule..."
           cd frontend
           OLD_COMMIT=$(git rev-parse HEAD)
-          cd ..
-          git submodule update --remote --merge frontend
-          cd frontend
+
+          # Fetch latest from origin
+          git fetch origin
+
+          # Get the latest commit from the default branch (master/main)
+          DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
+          LATEST_COMMIT=$(git rev-parse origin/$DEFAULT_BRANCH)
+
+          # Strategy 1: Try fast-forward merge first (cleanest approach)
+          echo "📍 Attempting fast-forward update..."
+          if git merge --ff-only origin/$DEFAULT_BRANCH 2>/dev/null; then
+            echo "✅ Fast-forward merge successful"
+          else
+            echo "⚠️ Fast-forward not possible, using reset strategy..."
+
+            # Strategy 2: Force update to latest (discards local changes)
+            # This is safe because submodules should track upstream exactly
+            git reset --hard origin/$DEFAULT_BRANCH
+            echo "✅ Force updated to latest commit"
+          fi
+
           NEW_COMMIT=$(git rev-parse HEAD)
           cd ..
-          
+
           if [ "$OLD_COMMIT" != "$NEW_COMMIT" ]; then
             echo "✅ Frontend updated from $OLD_COMMIT to $NEW_COMMIT"
             echo "FRONTEND_UPDATED=true" >> $GITHUB_ENV
             echo "FRONTEND_OLD_COMMIT=$OLD_COMMIT" >> $GITHUB_ENV
             echo "FRONTEND_NEW_COMMIT=$NEW_COMMIT" >> $GITHUB_ENV
+
+            # Stage the submodule change
+            git add frontend
           else
             echo "ℹ️ Frontend already up to date"
           fi
