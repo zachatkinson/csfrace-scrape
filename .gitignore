@@ -1,9 +1,13 @@
 # CSFrace Scrape Wrapper - .gitignore
 
-# Environment Files
+# Environment Files (CRITICAL: Never commit secrets!)
 .env
 .env.local
 .env.*.local
+.env.dev
+.env.prod
+.env.staging
+.env.test
 
 # Docker
 .docker/
