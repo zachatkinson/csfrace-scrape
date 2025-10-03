@@ -24,7 +24,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-      target: builder  # Uses development base for local development
+      target: production  # Uses production stage with proper CMD
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     environment:
@@ -102,7 +102,6 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      target: production
     ports:
       - "${FRONTEND_PORT:-3010}:3000"
     environment:
