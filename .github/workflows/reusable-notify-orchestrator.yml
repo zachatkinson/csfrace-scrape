@@ -48,7 +48,7 @@ jobs:
               "ref": "${{ github.ref }}",
               "sha": "${{ github.sha }}",
               "version": "${{ inputs.version }}",
-              "image_tag": "${{ inputs.image-tag }}",
+              "image_tag": ${{ toJSON(inputs.image-tag) }},
               "image_digest": "${{ inputs.image-digest }}",
               "actor": "${{ github.actor }}",
               "timestamp": "${{ github.event.repository.updated_at || github.run_id }}"
