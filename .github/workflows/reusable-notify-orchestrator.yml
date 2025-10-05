@@ -51,7 +51,7 @@ jobs:
               "image_tag": "${{ inputs.image-tag }}",
               "image_digest": "${{ inputs.image-digest }}",
               "actor": "${{ github.actor }}",
-              "timestamp": "${{ github.event.head_commit.timestamp }}"
+              "timestamp": "${{ github.event.repository.updated_at || github.run_id }}"
             }
 
       - name: Output notification summary
