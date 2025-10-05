@@ -26,10 +26,9 @@ on:
         type: string
         default: '.'
       build-target:
-        description: 'Docker build target stage'
+        description: 'Docker build target stage (optional - leave empty for single-stage Dockerfiles or to build entire multi-stage Dockerfile)'
         required: false
         type: string
-        default: 'production'
     outputs:
       image-tag:
         description: 'Full image tag with registry'
