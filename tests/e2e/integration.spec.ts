@@ -34,7 +34,7 @@ test.describe("Integration Tests @integration", () => {
 
     // Verify we're on the home page
     const currentUrl = page.url();
-    expect(currentUrl).toContain("localhost:3000");
+    expect(currentUrl).toContain(BASE_URL);
 
     // Check for common navigation elements
     const bodyContent = await page.textContent("body");
@@ -57,9 +57,10 @@ test.describe("Integration Tests @integration", () => {
     );
     expect(successfulResponses.length).toBeGreaterThan(0);
 
-    // Check that the main document loaded
+    // Check that the main document loaded from our base URL
+    const baseUrlHost = new URL(BASE_URL).host;
     const htmlResponses = responses.filter(
-      (r) => r.url().includes("localhost:3000") && r.status() === 200,
+      (r) => r.url().includes(baseUrlHost) && r.status() === 200,
     );
     expect(htmlResponses.length).toBeGreaterThan(0);
   });

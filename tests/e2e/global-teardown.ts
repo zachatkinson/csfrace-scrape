@@ -33,24 +33,25 @@ async function globalTeardown(config: FullConfig) {
 
   // Cleanup temporary files
   try {
-    const tempFiles = [
-      'test-results/temp-*.json',
-      'test-results/temp-*.txt'
-    ];
+    const testResultsDir = path.join(process.cwd(), 'test-results');
 
-    for (const pattern of tempFiles) {
-      const glob = require('glob');
-      const files = glob.sync(pattern);
+    // Check if test-results directory exists
+    if (fs.existsSync(testResultsDir)) {
+      const files = fs.readdirSync(testResultsDir);
+      const tempFilePatterns = [/^temp-.*\.json$/, /^temp-.*\.txt$/];
+
       files.forEach((file: string) => {
-        try {
-          fs.unlinkSync(file);
-        } catch (err) {
-          // Ignore cleanup errors
+        if (tempFilePatterns.some(pattern => pattern.test(file))) {
+          try {
+            fs.unlinkSync(path.join(testResultsDir, file));
+          } catch (err) {
+            // Ignore cleanup errors for individual files
+          }
         }
       });
-    }
 
-    console.log('🗑️ Temporary files cleaned up');
+      console.log('🗑️ Temporary files cleaned up');
+    }
   } catch (error) {
     console.warn('⚠️ Could not clean up temporary files:', error);
   }
