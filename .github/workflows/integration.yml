@@ -100,6 +100,11 @@ jobs:
           }
         timeout-minutes: 5
 
+      - name: Install service health check dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y redis-tools postgresql-client
+
       - name: Wait for services to be ready
         run: |
           chmod +x scripts/wait-for-services.sh
@@ -160,6 +165,11 @@ jobs:
           npm install
           pip install playwright pytest-asyncio httpx
           npx playwright install --with-deps chromium
+
+      - name: Install service health check dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y redis-tools postgresql-client
 
       - name: Start full service stack
         run: |
@@ -226,6 +236,11 @@ jobs:
         run: |
           npm install
           npx playwright install --with-deps
+
+      - name: Install service health check dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y redis-tools postgresql-client
 
       - name: Start production-like environment
         run: |
