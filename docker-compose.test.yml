@@ -67,6 +67,8 @@ services:
       dockerfile: Dockerfile
       args:
         NODE_ENV: production
+        PUBLIC_API_BASE_URL: http://localhost:8001
+        SERVER_API_BASE_URL: http://backend:8000
     ports:
       - "${FRONTEND_PORT:-3001}:3000"
     environment:
