@@ -66,7 +66,7 @@ jobs:
   # API Contract Validation
   api-contract-validation:
     needs: detect-changes
-    if: needs.detect-changes.outputs.backend == 'true' || needs.detect-changes.outputs.frontend == 'true'
+    if: github.ref == 'refs/heads/master' || needs.detect-changes.outputs.backend == 'true' || needs.detect-changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -120,7 +120,7 @@ jobs:
   # Cross-Service Integration Tests
   integration-tests:
     needs: detect-changes
-    if: needs.detect-changes.outputs.backend == 'true' || needs.detect-changes.outputs.frontend == 'true'
+    if: github.ref == 'refs/heads/master' || needs.detect-changes.outputs.backend == 'true' || needs.detect-changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
 
     strategy:
@@ -192,7 +192,7 @@ jobs:
   # End-to-End Workflow Tests
   e2e-tests:
     needs: [detect-changes, api-contract-validation]
-    if: needs.detect-changes.outputs.frontend == 'true' || github.event.inputs.test_type == 'e2e' || github.event.inputs.test_type == 'all'
+    if: github.ref == 'refs/heads/master' || needs.detect-changes.outputs.frontend == 'true' || github.event.inputs.test_type == 'e2e' || github.event.inputs.test_type == 'all'
     runs-on: ubuntu-latest
 
     steps:
