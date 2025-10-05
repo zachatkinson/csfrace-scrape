@@ -43,7 +43,7 @@ jobs:
   multi-service-health-check:
     name: 🏥 Multi-Service Health Monitoring
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ inputs.monitoring-duration-minutes + 5 }}
+    timeout-minutes: 15
     outputs:
       all-services-healthy: ${{ steps.final-status.outputs.all-healthy }}
       failed-services: ${{ steps.final-status.outputs.failed-services }}
