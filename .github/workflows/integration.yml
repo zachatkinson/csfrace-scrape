@@ -9,6 +9,7 @@ on:
       - 'docker-compose*.yml'
       - 'Dockerfile*'
       - '.github/workflows/**'
+      - 'tests/**'
   pull_request:
     branches: [ main, master ]
     paths:
@@ -16,6 +17,7 @@ on:
       - 'frontend/**'
       - 'docker-compose*.yml'
       - 'Dockerfile*'
+      - 'tests/**'
   workflow_dispatch:
     inputs:
       test_type:
