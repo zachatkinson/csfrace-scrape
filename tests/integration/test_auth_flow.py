@@ -187,8 +187,9 @@ class TestAuthFlow:
         # Navigate to frontend
         await page.goto(frontend_url)
 
-        # Wait for page to load
-        await page.wait_for_load_state("networkidle")
+        # Wait for page to load (use domcontentloaded instead of networkidle
+        # since real-time SSE/WebSocket connections remain open indefinitely)
+        await page.wait_for_load_state("domcontentloaded")
 
         # Check if login elements are present
         # This assumes the frontend has OAuth login buttons
