@@ -61,13 +61,14 @@ class TestAuthFlow:
         assert health_data["status"] == "healthy"
         assert "timestamp" in health_data
         assert "version" in health_data
-        assert "services" in health_data
 
-        # Verify database connectivity
-        assert health_data["services"]["database"]["status"] == "healthy"
+        # Verify database connectivity (top-level key, not under "services")
+        assert "database" in health_data
+        assert health_data["database"]["status"] == "healthy"
 
-        # Verify cache connectivity
-        assert health_data["services"]["cache"]["status"] == "healthy"
+        # Verify cache connectivity (top-level key, not under "services")
+        assert "cache" in health_data
+        assert health_data["cache"]["status"] == "healthy"
 
     async def test_frontend_accessibility(self, http_client: httpx.AsyncClient, frontend_url: str):
         """Test frontend service accessibility."""
@@ -209,10 +210,10 @@ class TestAuthFlow:
 
     async def test_api_error_handling(self, http_client: httpx.AsyncClient, backend_url: str):
         """Test API error handling and response formats."""
-        # Test invalid OAuth provider
+        # Test invalid OAuth provider (FastAPI returns 422 for enum validation errors)
         response = await http_client.get(f"{backend_url}/auth/invalid-provider/authorize")
 
-        assert response.status_code == 404
+        assert response.status_code == 422  # Validation error for invalid enum value
         error_data = response.json()
         assert "detail" in error_data
 

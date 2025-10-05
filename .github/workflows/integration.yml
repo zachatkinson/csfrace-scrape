@@ -164,7 +164,8 @@ jobs:
         run: |
           npm install
           pip install playwright pytest-asyncio httpx
-          npx playwright install --with-deps chromium
+          npx playwright install --with-deps chromium  # Node.js Playwright
+          playwright install chromium  # Python Playwright
 
       - name: Install service health check dependencies
         run: |
