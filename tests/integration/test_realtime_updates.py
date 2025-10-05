@@ -39,8 +39,10 @@ class TestRealtimeUpdates:
 
     @pytest.fixture
     async def http_client(self) -> httpx.AsyncClient:
-        """HTTP client for API testing."""
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        """HTTP client for API testing with extended timeout for streaming."""
+        # Use extended timeout for SSE streaming (5 min connect, 2 min read)
+        timeout = httpx.Timeout(300.0, read=120.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
             yield client
 
     @pytest.fixture
@@ -62,25 +64,34 @@ class TestRealtimeUpdates:
     async def test_sse_endpoint_availability(self, http_client: httpx.AsyncClient, backend_url: str):
         """Test Server-Sent Events endpoint availability."""
         try:
-            # Test SSE connection endpoint
-            async with http_client.stream("GET", f"{backend_url}/events/stream") as response:
+            # Test SSE connection endpoint with shorter timeout for initial connection
+            timeout = httpx.Timeout(10.0, connect=5.0, read=60.0)
+            async with http_client.stream("GET", f"{backend_url}/events/stream", timeout=timeout) as response:
                 if response.status_code == 404:
                     pytest.skip("SSE endpoint not implemented yet")
 
                 assert response.status_code == 200
                 assert "text/event-stream" in response.headers.get("content-type", "")
 
-                # Read first few bytes to confirm streaming
+                # Read first event with timeout
                 content = b""
-                async for chunk in response.aiter_bytes(1024):
-                    content += chunk
-                    if len(content) > 100:  # Read enough to verify format
-                        break
+                try:
+                    async for chunk in response.aiter_bytes(1024):
+                        content += chunk
+                        if len(content) > 100:  # Read enough to verify format
+                            break
+                except httpx.ReadTimeout:
+                    # If we got headers but no data, SSE might not be sending connection event
+                    if not content:
+                        pytest.fail("SSE endpoint connected but sent no data within timeout")
 
                 # Should contain SSE format markers
                 content_str = content.decode('utf-8', errors='ignore')
-                assert "data:" in content_str or "event:" in content_str or "id:" in content_str
+                assert "data:" in content_str or "event:" in content_str or "id:" in content_str, \
+                    f"SSE stream did not contain expected markers. Got: {content_str[:200]}"
 
+        except httpx.ReadTimeout as e:
+            pytest.fail(f"SSE endpoint read timeout: {e}")
         except (httpx.ConnectError, httpx.HTTPStatusError):
             # SSE might not be implemented yet, which is acceptable for initial testing
             pytest.skip("SSE endpoint not available")
