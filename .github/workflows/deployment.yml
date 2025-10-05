@@ -68,21 +68,44 @@ jobs:
           # Basic security checks before deployment
           echo "🔍 Running security validation..."
 
-          # Check for hardcoded secrets in configuration files only
-          # Source code (*.py, *.ts, *.tsx, etc.) should use proper secret scanning tools
-          # This scan focuses on .env files and similar config files
+          # Check for hardcoded secrets (password="actual", secret="actual", api_key="actual")
+          # Excludes: Source code (*.py, *.ts, *.tsx) where key="..." is legitimate
+          # Focuses on: Config files, scripts, env files
 
-          SECRETS_FOUND=$(find . -type f \
-            \( -name "*.env" -o -name ".env.*" -o -name "secrets.*" \) \
+          SECRETS_FOUND=$(grep -r \
+            -E "(password|secret|api_key|token)\s*[:=]\s*['\"][a-zA-Z0-9]{16,}" \
+            --include="*.sh" \
+            --include="*.env" \
+            --include="*.conf" \
+            --include="*.config" \
+            --include="*.properties" \
+            --include="*.xml" \
+            --exclude-dir=.git \
+            --exclude-dir=.github \
+            --exclude-dir=node_modules \
+            --exclude-dir=backend/migrations \
+            --exclude-dir=.playwright-mcp \
+            . | grep -v "example\|test\|dummy\|placeholder\|your-\|REPLACE\|CHANGE" || true)
+
+          if [ -n "$SECRETS_FOUND" ]; then
+            echo "⚠️ Potential hardcoded secrets found in config files:"
+            echo "$SECRETS_FOUND"
+            exit 1
+          fi
+
+          # Also check for accidentally committed secret files
+          SECRET_FILES=$(find . -type f \
+            \( -name "*.env" -o -name ".env.*" -o -name "secrets.*" -o -name "*_rsa" -o -name "*.pem" \) \
             ! -name "*.example" \
             ! -name "*.template" \
             ! -path "*/.git/*" \
             ! -path "*/node_modules/*" \
-            -exec grep -l ".*" {} \; 2>/dev/null || true)
+            ! -path "*/test/*" \
+            ! -path "*/tests/*" 2>/dev/null || true)
 
-          if [ -n "$SECRETS_FOUND" ]; then
+          if [ -n "$SECRET_FILES" ]; then
             echo "⚠️ Potential secret files found (should not be committed):"
-            echo "$SECRETS_FOUND"
+            echo "$SECRET_FILES"
             echo ""
             echo "These files should be in .gitignore"
             exit 1
