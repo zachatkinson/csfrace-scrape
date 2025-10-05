@@ -22,28 +22,28 @@ from urllib.parse import urlparse
 class TestRealtimeUpdates:
     """Test suite for real-time updates integration."""
 
-    @pytest.fixture(scope="class")
+    @pytest.fixture
     def backend_url(self) -> str:
         """Backend API base URL."""
         return "http://localhost:8001"
 
-    @pytest.fixture(scope="class")
+    @pytest.fixture
     def frontend_url(self) -> str:
         """Frontend application base URL."""
         return "http://localhost:3001"
 
-    @pytest.fixture(scope="class")
+    @pytest.fixture
     def websocket_url(self) -> str:
         """WebSocket URL for real-time connections."""
         return "ws://localhost:8001"
 
-    @pytest.fixture(scope="class")
+    @pytest.fixture
     async def http_client(self) -> httpx.AsyncClient:
         """HTTP client for API testing."""
         async with httpx.AsyncClient(timeout=30.0) as client:
             yield client
 
-    @pytest.fixture(scope="class")
+    @pytest.fixture
     async def browser(self) -> Browser:
         """Browser instance for end-to-end testing."""
         playwright = await async_playwright().start()

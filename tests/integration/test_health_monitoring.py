@@ -19,17 +19,17 @@ from typing import Dict, Any, List
 class TestHealthMonitoring:
     """Test suite for health monitoring integration."""
 
-    @pytest.fixture(scope="class")
+    @pytest.fixture
     def backend_url(self) -> str:
         """Backend API base URL."""
         return "http://localhost:8001"
 
-    @pytest.fixture(scope="class")
+    @pytest.fixture
     def frontend_url(self) -> str:
         """Frontend application base URL."""
         return "http://localhost:3001"
 
-    @pytest.fixture(scope="class")
+    @pytest.fixture
     async def http_client(self) -> httpx.AsyncClient:
         """HTTP client for API testing."""
         async with httpx.AsyncClient(timeout=30.0) as client:
