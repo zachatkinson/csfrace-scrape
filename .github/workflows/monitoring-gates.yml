@@ -350,14 +350,20 @@ jobs:
           echo "::warning title=Auto-Rollback Triggered::Deployment to ${{ inputs.environment }} failed health checks and was automatically rolled back"
 
       - name: Send rollback notification
-        if: always() && secrets.monitoring-webhook != ''
+        if: always()
+        continue-on-error: true
         run: |
-          curl -X POST "${{ secrets.monitoring-webhook }}" \
-            -H "Content-Type: application/json" \
-            -d '{
-              "text": "🚨 Auto-rollback executed for ${{ inputs.environment }}",
-              "environment": "${{ inputs.environment }}",
-              "backend_version": "${{ inputs.backend-version }}",
-              "frontend_version": "${{ inputs.frontend-version }}",
-              "failed_services": "${{ needs.multi-service-health-check.outputs.failed-services }}"
-            }'
+          # Only send notification if webhook is configured
+          if [[ -n "${{ secrets.monitoring-webhook }}" ]]; then
+            curl -X POST "${{ secrets.monitoring-webhook }}" \
+              -H "Content-Type: application/json" \
+              -d '{
+                "text": "🚨 Auto-rollback executed for ${{ inputs.environment }}",
+                "environment": "${{ inputs.environment }}",
+                "backend_version": "${{ inputs.backend-version }}",
+                "frontend_version": "${{ inputs.frontend-version }}",
+                "failed_services": "${{ needs.multi-service-health-check.outputs.failed-services }}"
+              }'
+          else
+            echo "No monitoring webhook configured, skipping notification"
+          fi
