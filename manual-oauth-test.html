@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>OAuth Testing Helper</title>
+    <style>
+        body { font-family: monospace; margin: 20px; background: #1a1a1a; color: #fff; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .info { background: #1e40af; }
+        .success { background: #065f46; }
+        .error { background: #991b1b; }
+        .warning { background: #92400e; }
+        pre { background: #333; padding: 15px; border-radius: 5px; overflow-x: auto; }
+        button { padding: 10px 20px; margin: 5px; border: none; border-radius: 5px; cursor: pointer; }
+        .primary { background: #2563eb; color: white; }
+        .secondary { background: #6b7280; color: white; }
+    </style>
+</head>
+<body>
+    <h1>OAuth Authentication State Testing Helper</h1>
+
+    <div class="status info">
+        <strong>Instructions:</strong>
+        <ol>
+            <li>Complete your OAuth login in the main app: <a href="https://localhost" target="_blank">https://localhost</a></li>
+            <li>Return here and click "Check Auth State" to see what happened</li>
+            <li>The results will show exactly what the MainLayout function sees</li>
+        </ol>
+    </div>
+
+    <button class="primary" onclick="checkAuthState()">Check Auth State</button>
+    <button class="secondary" onclick="clearStorage()">Clear Storage</button>
+    <button class="secondary" onclick="simulateOAuthSuccess()">Simulate OAuth Success</button>
+
+    <div id="results"></div>
+
+    <script>
+        async function checkAuthState() {
+            const results = document.getElementById('results');
+            results.innerHTML = '<div class="status info">Checking authentication state...</div>';
+
+            try {
+                // Check localStorage
+                const oauthSuccess = localStorage.getItem('oauth_success');
+                const authToken = localStorage.getItem('auth_token');
+
+                // Check sessionStorage
+                const sessionToken = sessionStorage.getItem('auth_token');
+
+                // Check cookies
+                const cookies = document.cookie;
+
+                // Test /auth/me endpoint
+                let authMeResponse;
+                try {
+                    const response = await fetch('https://localhost/auth/me', {
+                        method: 'GET',
+                        credentials: 'include',
+                        headers: { 'Accept': 'application/json' }
+                    });
+
+                    authMeResponse = {
+                        ok: response.ok,
+                        status: response.status,
+                        statusText: response.statusText,
+                        headers: Object.fromEntries(response.headers.entries()),
+                        body: response.ok ? await response.json() : await response.text()
+                    };
+                } catch (error) {
+                    authMeResponse = { error: error.message };
+                }
+
+                // Simulate updateUserSettingsVisibility logic
+                const hasToken = authToken || sessionToken || cookies.includes('auth_token');
+
+                const resultHtml = \`
+                <div class="status success">
+                    <h3>Authentication State Analysis</h3>
+                </div>
+
+                <h4>🔍 Storage Check:</h4>
+                <pre>localStorage.oauth_success: \${oauthSuccess ? 'YES' : 'NO'}
+localStorage.auth_token: \${authToken ? 'YES' : 'NO'}
+sessionStorage.auth_token: \${sessionToken ? 'YES' : 'NO'}
+document.cookie: \${cookies || 'none'}</pre>
+
+                <h4>🎯 Token Detection (MainLayout Logic):</h4>
+                <pre>hasToken (localStorage || sessionStorage || cookies): \${hasToken}</pre>
+
+                <h4>🌐 /auth/me API Response:</h4>
+                <pre>\${JSON.stringify(authMeResponse, null, 2)}</pre>
+
+                <h4>🔧 MainLayout updateUserSettingsVisibility() Result:</h4>
+                <pre>\${analyzeVisibility(hasToken, authMeResponse)}</pre>
+
+                <h4>📦 localStorage oauth_success Detail:</h4>
+                <pre>\${oauthSuccess ? JSON.stringify(JSON.parse(oauthSuccess), null, 2) : 'Not found'}</pre>
+                \`;
+
+                results.innerHTML = resultHtml;
+
+            } catch (error) {
+                results.innerHTML = \`<div class="status error">Error: \${error.message}</div>\`;
+            }
+        }
+
+        function analyzeVisibility(hasToken, authMeResponse) {
+            if (!hasToken) {
+                return "❌ User settings will be HIDDEN (no tokens found)";
+            }
+
+            if (authMeResponse.ok) {
+                return "✅ User settings will be VISIBLE (authenticated successfully)";
+            } else if (authMeResponse.status === 401) {
+                return "❌ User settings will be HIDDEN (401 Unauthorized - tokens invalid)";
+            } else {
+                return \`⚠️  User settings will be HIDDEN (API error: \${authMeResponse.status})\`;
+            }
+        }
+
+        function clearStorage() {
+            localStorage.removeItem('oauth_success');
+            localStorage.removeItem('auth_token');
+            sessionStorage.removeItem('auth_token');
+            alert('Storage cleared!');
+        }
+
+        function simulateOAuthSuccess() {
+            localStorage.setItem('oauth_success', JSON.stringify({
+                provider: 'google',
+                timestamp: Date.now(),
+                user: { id: 'test_user', email: 'test@example.com', name: 'Test User' }
+            }));
+            alert('Simulated OAuth success - now check auth state');
+        }
+
+        // Auto-check on page load
+        setTimeout(checkAuthState, 500);
+    </script>
+</body>
+</html>

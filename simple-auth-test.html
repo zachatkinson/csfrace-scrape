@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple OAuth Test</title>
+    <style>
+        body { font-family: monospace; margin: 20px; background: #1a1a1a; color: #fff; }
+        button { padding: 15px 30px; margin: 10px; border: none; border-radius: 5px; cursor: pointer; background: #2563eb; color: white; font-size: 16px; }
+        pre { background: #333; padding: 15px; border-radius: 5px; white-space: pre-wrap; }
+        .result { margin: 20px 0; padding: 15px; border-radius: 5px; background: #374151; }
+    </style>
+</head>
+<body>
+    <h1>OAuth Authentication Test</h1>
+
+    <p><strong>Step 1:</strong> Complete OAuth at: <a href="https://localhost" target="_blank" style="color: #60a5fa;">https://localhost</a></p>
+    <p><strong>Step 2:</strong> Click the button below to check the result</p>
+
+    <button onclick="testAuth()">🔍 Check Authentication Status</button>
+
+    <div id="output"></div>
+
+    <script>
+        async function testAuth() {
+            const output = document.getElementById('output');
+
+            try {
+                console.log('Starting auth test...');
+
+                // Check storage
+                const oauth = localStorage.getItem('oauth_success');
+                const authToken = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
+                const cookies = document.cookie;
+
+                output.innerHTML = '<div class="result">Testing authentication...</div>';
+
+                // Test API
+                console.log('Calling /auth/me...');
+                const response = await fetch('https://localhost/auth/me', {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: { 'Accept': 'application/json' }
+                });
+
+                const responseData = response.ok ? await response.json() : await response.text();
+
+                // Display results
+                const results = `
+🔍 AUTHENTICATION STATUS CHECK
+
+📦 Storage:
+- oauth_success: ${oauth ? '✅ Found' : '❌ Not found'}
+- auth_token (localStorage): ${localStorage.getItem('auth_token') ? '✅ Found' : '❌ Not found'}
+- auth_token (sessionStorage): ${sessionStorage.getItem('auth_token') ? '✅ Found' : '❌ Not found'}
+- cookies: ${cookies || '❌ None'}
+
+🌐 API Test (/auth/me):
+- Status: ${response.status} ${response.statusText}
+- Success: ${response.ok ? '✅ YES' : '❌ NO'}
+- Response: ${JSON.stringify(responseData, null, 2)}
+
+🎯 MainLayout Logic Analysis:
+- hasToken check: ${authToken || cookies.includes('auth_token') ? '✅ PASS' : '❌ FAIL'}
+- API authentication: ${response.ok ? '✅ AUTHENTICATED' : '❌ NOT AUTHENTICATED'}
+- User settings should be: ${response.ok ? '✅ VISIBLE' : '❌ HIDDEN'}
+
+${oauth ? '\n📋 OAuth Success Details:\n' + JSON.stringify(JSON.parse(oauth), null, 2) : ''}
+                `;
+
+                output.innerHTML = `<div class="result"><pre>${results}</pre></div>`;
+
+            } catch (error) {
+                console.error('Test error:', error);
+                output.innerHTML = `<div class="result">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        // Auto-test on load
+        window.addEventListener('load', () => {
+            setTimeout(testAuth, 1000);
+        });
+    </script>
+</body>
+</html>

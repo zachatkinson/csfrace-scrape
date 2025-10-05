@@ -65,7 +65,8 @@ services:
       - OAUTH_APPLE_CLIENT_ID=${OAUTH_APPLE_CLIENT_ID:-your-apple-service-id}
       - OAUTH_APPLE_CLIENT_SECRET=${OAUTH_APPLE_CLIENT_SECRET:-your-apple-client-secret}
       - OAUTH_REDIRECT_URI_BASE=${OAUTH_REDIRECT_URI_BASE:-http://localhost:8000}
-      
+      - FORCE_SECURE_COOKIES=${FORCE_SECURE_COOKIES:-false}
+
       # Auth Token Configuration
       - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-720}
       
@@ -108,8 +109,8 @@ services:
       - NODE_ENV=production
       # Astro will automatically load .env.production file
       # Override specific variables if needed for different deployments
-      - SERVER_API_BASE_URL=${FRONTEND_SERVER_API_URL:-http://host.docker.internal:8000}  # Host-accessible URL for server-side auth
-      - PUBLIC_BACKEND_SSE_URL=${PUBLIC_BACKEND_SSE_URL:-http://localhost:8000}  # Client-side SSE connection (browser accessible)
+      - SERVER_API_BASE_URL=${FRONTEND_SERVER_API_URL:-http://backend:8000}  # Server-side uses internal Docker network
+      - PUBLIC_API_BASE_URL=${PUBLIC_API_BASE_URL:-https://localhost}  # Client-side uses nginx reverse proxy (port 443)
     extra_hosts:
       # Docker best practice: enable host.docker.internal for server-side authentication
       - "host.docker.internal:host-gateway"

@@ -1,0 +1,415 @@
+name: Deployment Gates & Environment Promotion
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'docker-compose*.yml'
+      - '.github/workflows/**'
+  workflow_run:
+    workflows: ["Integration Tests & Cross-Service Validation"]
+    types: [completed]
+    branches: [main, master]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+concurrency:
+  group: deployment-${{ github.ref }}
+  cancel-in-progress: false  # Don't cancel deployments
+
+jobs:
+  # Deployment Prerequisites
+  validate-deployment-readiness:
+    runs-on: ubuntu-latest
+    outputs:
+      integration-passed: ${{ steps.integration-check.outputs.passed }}
+      staging-deploy: ${{ steps.deployment-decision.outputs.staging }}
+      production-ready: ${{ steps.deployment-decision.outputs.production }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Check Integration Test Results
+        id: integration-check
+        run: |
+          # Check if integration tests passed
+          if [ "${{ github.event.workflow_run.conclusion }}" == "success" ] || [ "${{ github.event_name }}" == "push" ]; then
+            echo "passed=true" >> $GITHUB_OUTPUT
+          else
+            echo "passed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Deployment Decision Logic
+        id: deployment-decision
+        run: |
+          # Auto-deploy to staging if integration tests passed
+          if [ "${{ steps.integration-check.outputs.passed }}" == "true" ]; then
+            echo "staging=true" >> $GITHUB_OUTPUT
+
+            # Check if this is a release tag or main branch for production readiness
+            if [[ "${{ github.ref }}" == "refs/tags/v"* ]] || [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+              echo "production=true" >> $GITHUB_OUTPUT
+            else
+              echo "production=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "staging=false" >> $GITHUB_OUTPUT
+            echo "production=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Security Scan
+        run: |
+          # Basic security checks before deployment
+          echo "🔍 Running security validation..."
+
+          # Check for hardcoded secrets (password="actual", secret="actual", api_key="actual")
+          # Excludes: Source code (*.py, *.ts, *.tsx) where key="..." is legitimate
+          # Focuses on: Config files, scripts, env files
+
+          SECRETS_FOUND=$(grep -r \
+            -E "(password|secret|api_key|token)\s*[:=]\s*['\"][a-zA-Z0-9]{16,}" \
+            --include="*.sh" \
+            --include="*.env" \
+            --include="*.conf" \
+            --include="*.config" \
+            --include="*.properties" \
+            --include="*.xml" \
+            --exclude-dir=.git \
+            --exclude-dir=.github \
+            --exclude-dir=node_modules \
+            --exclude-dir=backend/migrations \
+            --exclude-dir=.playwright-mcp \
+            . | grep -v "example\|test\|dummy\|placeholder\|your-\|REPLACE\|CHANGE" || true)
+
+          if [ -n "$SECRETS_FOUND" ]; then
+            echo "⚠️ Potential hardcoded secrets found in config files:"
+            echo "$SECRETS_FOUND"
+            exit 1
+          fi
+
+          # Also check for accidentally committed secret files
+          # Note: .env.production and .env.development are legitimate (contain PUBLIC vars like API URLs)
+          # We're looking for .env.local, .env (no suffix), and actual secret files
+          SECRET_FILES=$(find . -type f \
+            \( -name ".env" -o -name ".env.local" -o -name ".env.*.local" -o -name "secrets.*" -o -name "*_rsa" -o -name "*.pem" -o -name "*.key" \) \
+            ! -name "*.example" \
+            ! -name "*.template" \
+            ! -name "*.pub" \
+            ! -path "*/.git/*" \
+            ! -path "*/node_modules/*" \
+            ! -path "*/test/*" \
+            ! -path "*/tests/*" \
+            ! -path "*/nginx/*.key" \
+            2>/dev/null || true)
+
+          if [ -n "$SECRET_FILES" ]; then
+            echo "⚠️ Potential secret files found (should not be committed):"
+            echo "$SECRET_FILES"
+            echo ""
+            echo "These files should be in .gitignore"
+            exit 1
+          fi
+
+          echo "✅ Security validation passed"
+
+  # Build and Push Container Images
+  build-and-push:
+    needs: validate-deployment-readiness
+    if: needs.validate-deployment-readiness.outputs.integration-passed == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [backend, frontend]
+    outputs:
+      backend-image: ${{ steps.image-tags.outputs.backend-tag }}
+      frontend-image: ${{ steps.image-tags.outputs.frontend-tag }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate Image Tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.service }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and Push Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./${{ matrix.service }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Set Image Tags Output
+        id: image-tags
+        run: |
+          IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/${{ matrix.service }}:${{ github.sha }}"
+          echo "${{ matrix.service }}-tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+
+  # Staging Deployment (Automatic)
+  deploy-staging:
+    needs: [validate-deployment-readiness, build-and-push]
+    if: needs.validate-deployment-readiness.outputs.staging-deploy == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://staging.csfrace.com
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Deploy to Staging
+        run: |
+          echo "🚀 Deploying to Staging Environment"
+          echo "Backend Image: ${{ needs.build-and-push.outputs.backend-image }}"
+          echo "Frontend Image: ${{ needs.build-and-push.outputs.frontend-image }}"
+
+          # Staging deployment commands would go here
+          # Example: kubectl, docker-compose, or deployment scripts
+
+          # For now, simulate deployment
+          echo "✅ Staging deployment completed"
+
+      - name: Run Staging Smoke Tests
+        run: |
+          echo "🧪 Running staging smoke tests..."
+
+          # Wait for deployment to stabilize
+          sleep 30
+
+          # Basic health checks
+          curl -f https://staging-api.csfrace.com/health/ || exit 1
+          curl -f https://staging.csfrace.com/ || exit 1
+
+          echo "✅ Staging smoke tests passed"
+
+      - name: Staging Performance Test
+        run: |
+          echo "⚡ Running staging performance tests..."
+
+          # Basic performance validation
+          response_time=$(curl -o /dev/null -s -w "%{time_total}" https://staging-api.csfrace.com/health/)
+
+          if (( $(echo "$response_time > 2.0" | bc -l) )); then
+            echo "❌ Response time too slow: ${response_time}s"
+            exit 1
+          fi
+
+          echo "✅ Performance tests passed (${response_time}s)"
+
+      - name: Update Staging Status
+        run: |
+          echo "📊 Updating staging deployment status..."
+
+          # Create deployment record
+          cat > staging-deployment.json << EOF
+          {
+            "environment": "staging",
+            "commit": "${{ github.sha }}",
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "images": {
+              "backend": "${{ needs.build-and-push.outputs.backend-image }}",
+              "frontend": "${{ needs.build-and-push.outputs.frontend-image }}"
+            },
+            "status": "deployed"
+          }
+          EOF
+
+      - name: Upload Staging Deployment Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-deployment-${{ github.sha }}
+          path: staging-deployment.json
+
+  # Production Deployment Gate (Manual Approval Required)
+  production-deployment-gate:
+    needs: [validate-deployment-readiness, build-and-push, deploy-staging]
+    if: |
+      needs.validate-deployment-readiness.outputs.production-ready == 'true' &&
+      needs.deploy-staging.result == 'success'
+    runs-on: ubuntu-latest
+    environment:
+      name: production-approval
+      url: https://github.com/${{ github.repository }}/actions
+    steps:
+      - name: Production Deployment Readiness Check
+        run: |
+          echo "🎯 Production Deployment Gate Activated"
+          echo ""
+          echo "📋 Pre-deployment Checklist:"
+          echo "✅ Integration tests passed"
+          echo "✅ Container images built and pushed"
+          echo "✅ Staging deployment successful"
+          echo "✅ Staging smoke tests passed"
+          echo ""
+          echo "⏳ Awaiting manual approval for production deployment..."
+          echo ""
+          echo "🔗 Review deployment details:"
+          echo "   - Commit: ${{ github.sha }}"
+          echo "   - Branch: ${{ github.ref_name }}"
+          echo "   - Backend Image: ${{ needs.build-and-push.outputs.backend-image }}"
+          echo "   - Frontend Image: ${{ needs.build-and-push.outputs.frontend-image }}"
+
+  # Production Deployment (Manual Approval Required)
+  deploy-production:
+    needs: [validate-deployment-readiness, build-and-push, deploy-staging, production-deployment-gate]
+    if: |
+      needs.validate-deployment-readiness.outputs.production-ready == 'true' &&
+      needs.deploy-staging.result == 'success'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://csfrace.com
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Production Pre-deployment Validation
+        run: |
+          echo "🔍 Production pre-deployment validation..."
+
+          # Verify staging is healthy
+          staging_health=$(curl -s https://staging-api.csfrace.com/health/ | jq -r '.status')
+          if [ "$staging_health" != "healthy" ]; then
+            echo "❌ Staging environment is not healthy"
+            exit 1
+          fi
+
+          # Additional production readiness checks
+          echo "✅ Production validation passed"
+
+      - name: Deploy to Production
+        run: |
+          echo "🚀 Deploying to Production Environment"
+          echo "Backend Image: ${{ needs.build-and-push.outputs.backend-image }}"
+          echo "Frontend Image: ${{ needs.build-and-push.outputs.frontend-image }}"
+
+          # Production deployment commands would go here
+          # Example: Blue-green deployment, rolling updates, etc.
+
+          # For now, simulate deployment
+          echo "✅ Production deployment completed"
+
+      - name: Production Health Check
+        run: |
+          echo "🏥 Running production health checks..."
+
+          # Wait for deployment to stabilize
+          sleep 60
+
+          # Comprehensive health checks
+          curl -f https://api.csfrace.com/health/ || exit 1
+          curl -f https://csfrace.com/ || exit 1
+
+          # Check database connectivity
+          health_response=$(curl -s https://api.csfrace.com/health/)
+          db_status=$(echo "$health_response" | jq -r '.services.database.status')
+
+          if [ "$db_status" != "healthy" ]; then
+            echo "❌ Database health check failed"
+            exit 1
+          fi
+
+          echo "✅ Production health checks passed"
+
+      - name: Production Performance Validation
+        run: |
+          echo "⚡ Running production performance validation..."
+
+          # Performance benchmarks
+          response_time=$(curl -o /dev/null -s -w "%{time_total}" https://api.csfrace.com/health/)
+
+          if (( $(echo "$response_time > 1.0" | bc -l) )); then
+            echo "❌ Production response time too slow: ${response_time}s"
+            exit 1
+          fi
+
+          echo "✅ Production performance validated (${response_time}s)"
+
+      - name: Update Production Status
+        run: |
+          echo "📊 Updating production deployment status..."
+
+          # Create production deployment record
+          cat > production-deployment.json << EOF
+          {
+            "environment": "production",
+            "commit": "${{ github.sha }}",
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "images": {
+              "backend": "${{ needs.build-and-push.outputs.backend-image }}",
+              "frontend": "${{ needs.build-and-push.outputs.frontend-image }}"
+            },
+            "status": "deployed",
+            "approved_by": "${{ github.actor }}"
+          }
+          EOF
+
+      - name: Upload Production Deployment Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-deployment-${{ github.sha }}
+          path: production-deployment.json
+
+      - name: Notify Deployment Success
+        run: |
+          echo "🎉 Production deployment successful!"
+          echo ""
+          echo "📈 Deployment Summary:"
+          echo "   - Environment: Production"
+          echo "   - Commit: ${{ github.sha }}"
+          echo "   - Deployed by: ${{ github.actor }}"
+          echo "   - Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo ""
+          echo "🔗 Application URLs:"
+          echo "   - Frontend: https://csfrace.com"
+          echo "   - API: https://api.csfrace.com"
+          echo "   - Docs: https://api.csfrace.com/docs"
+
+  # Rollback Capability
+  rollback-production:
+    if: failure() && needs.deploy-production.result == 'failure'
+    needs: [deploy-production]
+    runs-on: ubuntu-latest
+    environment:
+      name: production-rollback
+    steps:
+      - name: Production Rollback
+        run: |
+          echo "🚨 Production deployment failed - initiating rollback"
+
+          # Rollback logic would go here
+          # Example: Revert to previous container images, database migrations, etc.
+
+          echo "⚠️ Rollback completed - manual investigation required"
