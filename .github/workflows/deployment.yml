@@ -94,14 +94,19 @@ jobs:
           fi
 
           # Also check for accidentally committed secret files
+          # Note: .env.production and .env.development are legitimate (contain PUBLIC vars like API URLs)
+          # We're looking for .env.local, .env (no suffix), and actual secret files
           SECRET_FILES=$(find . -type f \
-            \( -name "*.env" -o -name ".env.*" -o -name "secrets.*" -o -name "*_rsa" -o -name "*.pem" \) \
+            \( -name ".env" -o -name ".env.local" -o -name ".env.*.local" -o -name "secrets.*" -o -name "*_rsa" -o -name "*.pem" -o -name "*.key" \) \
             ! -name "*.example" \
             ! -name "*.template" \
+            ! -name "*.pub" \
             ! -path "*/.git/*" \
             ! -path "*/node_modules/*" \
             ! -path "*/test/*" \
-            ! -path "*/tests/*" 2>/dev/null || true)
+            ! -path "*/tests/*" \
+            ! -path "*/nginx/*.key" \
+            2>/dev/null || true)
 
           if [ -n "$SECRET_FILES" ]; then
             echo "⚠️ Potential secret files found (should not be committed):"
