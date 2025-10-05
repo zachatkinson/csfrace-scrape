@@ -25,10 +25,6 @@ on:
         required: false
         type: string
         default: '.'
-      build-target:
-        description: 'Docker build target stage (optional - leave empty for single-stage Dockerfiles or to build entire multi-stage Dockerfile)'
-        required: false
-        type: string
     outputs:
       image-tag:
         description: 'Full image tag with registry'
@@ -93,7 +89,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          target: ${{ inputs.build-target }}
 
       - name: Generate container attestation
         uses: actions/attest-build-provenance@v1
