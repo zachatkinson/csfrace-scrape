@@ -1,0 +1,65 @@
+name: Reusable Orchestrator Notification
+
+# SOLID: Single Responsibility - Only notifies orchestrator of new releases
+# DRY: Called by both backend and frontend, no duplication
+# SOC: Individual repos notify, orchestrator coordinates deployment
+
+on:
+  workflow_call:
+    inputs:
+      service-name:
+        description: 'Service name (backend or frontend)'
+        required: true
+        type: string
+      version:
+        description: 'Semantic version released (e.g., v5.15.0)'
+        required: true
+        type: string
+      image-tag:
+        description: 'Full Docker image tag'
+        required: true
+        type: string
+      image-digest:
+        description: 'Docker image digest'
+        required: true
+        type: string
+    secrets:
+      orchestrator-token:
+        description: 'GitHub token with repo_dispatch permission for orchestrator'
+        required: true
+
+jobs:
+  notify:
+    name: Notify Orchestrator
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Send repository dispatch event
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.orchestrator-token }}
+          repository: zachatkinson/csfrace-scrape
+          event-type: ${{ inputs.service-name }}-updated
+          client-payload: |
+            {
+              "service": "${{ inputs.service-name }}",
+              "repository": "${{ github.repository }}",
+              "ref": "${{ github.ref }}",
+              "sha": "${{ github.sha }}",
+              "version": "${{ inputs.version }}",
+              "image_tag": "${{ inputs.image-tag }}",
+              "image_digest": "${{ inputs.image-digest }}",
+              "actor": "${{ github.actor }}",
+              "timestamp": "${{ github.event.head_commit.timestamp }}"
+            }
+
+      - name: Output notification summary
+        run: |
+          echo "## 📢 Orchestrator Notified" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Service:** ${{ inputs.service-name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** \`${{ inputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${{ inputs.image-tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Orchestrator will coordinate deployment to staging environment." >> $GITHUB_STEP_SUMMARY

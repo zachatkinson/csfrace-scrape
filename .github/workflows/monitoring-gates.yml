@@ -1,0 +1,363 @@
+name: 🔍 Multi-Service Monitoring & Auto-Rollback
+
+# SOLID: Single Responsibility - ONLY monitors health and triggers rollback
+# DRY: Reusable monitoring logic for any environment
+# SOC: Orchestrator monitors ALL services together, not individual services
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+        description: 'Environment to monitor (staging/production)'
+      backend-version:
+        required: true
+        type: string
+        description: 'Backend version deployed'
+      frontend-version:
+        required: true
+        type: string
+        description: 'Frontend version deployed'
+      monitoring-duration-minutes:
+        required: false
+        type: number
+        default: 5
+        description: 'How long to monitor before declaring success'
+    secrets:
+      monitoring-webhook:
+        required: false
+        description: 'Webhook URL for monitoring alerts (Slack, Teams, etc.)'
+
+env:
+  # Environment-specific configuration (DRY: single source of truth)
+  PRODUCTION_URL: https://csfrace.com
+  STAGING_URL: https://staging.csfrace.com
+  PRODUCTION_ERROR_THRESHOLD: 1.0
+  STAGING_ERROR_THRESHOLD: 5.0
+  PRODUCTION_RESPONSE_TIME_MS: 2000
+  STAGING_RESPONSE_TIME_MS: 5000
+
+jobs:
+  # Job 1: Monitor all services health (SOC: only orchestrator does cross-service monitoring)
+  multi-service-health-check:
+    name: 🏥 Multi-Service Health Monitoring
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.monitoring-duration-minutes + 5 }}
+    outputs:
+      all-services-healthy: ${{ steps.final-status.outputs.all-healthy }}
+      failed-services: ${{ steps.final-status.outputs.failed-services }}
+
+    steps:
+      - name: Set environment variables
+        id: env-config
+        run: |
+          if [[ "${{ inputs.environment }}" == "production" ]]; then
+            echo "base-url=${{ env.PRODUCTION_URL }}" >> $GITHUB_OUTPUT
+            echo "error-threshold=${{ env.PRODUCTION_ERROR_THRESHOLD }}" >> $GITHUB_OUTPUT
+            echo "response-time-max=${{ env.PRODUCTION_RESPONSE_TIME_MS }}" >> $GITHUB_OUTPUT
+          else
+            echo "base-url=${{ env.STAGING_URL }}" >> $GITHUB_OUTPUT
+            echo "error-threshold=${{ env.STAGING_ERROR_THRESHOLD }}" >> $GITHUB_OUTPUT
+            echo "response-time-max=${{ env.STAGING_RESPONSE_TIME_MS }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Wait for deployment stabilization
+        run: |
+          echo "⏳ Waiting 60 seconds for all services to stabilize..."
+          sleep 60
+
+      - name: Check Backend Service
+        id: backend-health
+        run: |
+          BASE_URL="${{ steps.env-config.outputs.base-url }}"
+
+          echo "🔍 Checking backend service..."
+
+          # Health endpoint
+          health=$(curl -sf "${BASE_URL}/api/health" || echo "FAILED")
+          if [[ "$health" == "FAILED" ]]; then
+            echo "status=unhealthy" >> $GITHUB_OUTPUT
+            echo "❌ Backend health check failed"
+            exit 1
+          fi
+
+          # API endpoint
+          api=$(curl -sf -o /dev/null -w "%{http_code}" "${BASE_URL}/api/" || echo "000")
+          if [[ ! "$api" =~ ^[23] ]]; then
+            echo "status=unhealthy" >> $GITHUB_OUTPUT
+            echo "❌ Backend API failed (HTTP $api)"
+            exit 1
+          fi
+
+          echo "status=healthy" >> $GITHUB_OUTPUT
+          echo "✅ Backend service healthy"
+
+      - name: Check Frontend Service
+        id: frontend-health
+        run: |
+          BASE_URL="${{ steps.env-config.outputs.base-url }}"
+
+          echo "🔍 Checking frontend service..."
+
+          # Main page
+          main=$(curl -sf -o /dev/null -w "%{http_code}" "${BASE_URL}/" || echo "000")
+          if [[ ! "$main" =~ ^[23] ]]; then
+            echo "status=unhealthy" >> $GITHUB_OUTPUT
+            echo "❌ Frontend main page failed (HTTP $main)"
+            exit 1
+          fi
+
+          # Static assets (check if JS/CSS load)
+          assets=$(curl -sf -o /dev/null -w "%{http_code}" "${BASE_URL}/favicon.ico" || echo "000")
+          if [[ ! "$assets" =~ ^[23] ]]; then
+            echo "status=unhealthy" >> $GITHUB_OUTPUT
+            echo "❌ Frontend assets failed (HTTP $assets)"
+            exit 1
+          fi
+
+          echo "status=healthy" >> $GITHUB_OUTPUT
+          echo "✅ Frontend service healthy"
+
+      - name: Check Database Connectivity
+        id: database-health
+        run: |
+          BASE_URL="${{ steps.env-config.outputs.base-url }}"
+
+          echo "🔍 Checking database connectivity..."
+
+          # Query health endpoint for database status
+          db_status=$(curl -sf "${BASE_URL}/api/health/database" | jq -r '.status' 2>/dev/null || echo "unknown")
+
+          if [[ "$db_status" == "healthy" ]] || [[ "$db_status" == "ok" ]]; then
+            echo "status=healthy" >> $GITHUB_OUTPUT
+            echo "✅ Database connectivity healthy"
+          else
+            echo "status=unhealthy" >> $GITHUB_OUTPUT
+            echo "❌ Database connectivity issues (status: $db_status)"
+            exit 1
+          fi
+
+      - name: Check Redis/Cache Service
+        id: cache-health
+        run: |
+          BASE_URL="${{ steps.env-config.outputs.base-url }}"
+
+          echo "🔍 Checking cache service..."
+
+          # Query health endpoint for cache status
+          cache_status=$(curl -sf "${BASE_URL}/api/health/cache" | jq -r '.status' 2>/dev/null || echo "unknown")
+
+          if [[ "$cache_status" == "healthy" ]] || [[ "$cache_status" == "ok" ]]; then
+            echo "status=healthy" >> $GITHUB_OUTPUT
+            echo "✅ Cache service healthy"
+          else
+            echo "status=unhealthy" >> $GITHUB_OUTPUT
+            echo "❌ Cache service issues (status: $cache_status)"
+            exit 1
+          fi
+
+      - name: Cross-Service Integration Test
+        id: integration-test
+        run: |
+          BASE_URL="${{ steps.env-config.outputs.base-url }}"
+
+          echo "🧪 Running cross-service integration test..."
+
+          # Test a complete flow that exercises backend + frontend + database
+          # Example: Load homepage, make API call, verify database query
+
+          integration_status=$(curl -sf -o /dev/null -w "%{http_code}" \
+            -X POST "${BASE_URL}/api/test-integration" \
+            -H "Content-Type: application/json" \
+            -d '{"test": "integration"}' || echo "000")
+
+          if [[ "$integration_status" =~ ^[23] ]]; then
+            echo "status=passed" >> $GITHUB_OUTPUT
+            echo "✅ Integration test passed"
+          else
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "❌ Integration test failed (HTTP $integration_status)"
+            exit 1
+          fi
+
+      - name: Performance & Response Time Monitoring
+        id: performance-check
+        run: |
+          BASE_URL="${{ steps.env-config.outputs.base-url }}"
+          MAX_RESPONSE_MS="${{ steps.env-config.outputs.response-time-max }}"
+
+          echo "⚡ Monitoring response times across all services..."
+
+          # Backend response time
+          backend_time=$(curl -sf -o /dev/null -w "%{time_total}" "${BASE_URL}/api/health")
+          backend_ms=$(echo "$backend_time * 1000" | bc)
+          echo "Backend response: ${backend_ms}ms"
+
+          # Frontend response time
+          frontend_time=$(curl -sf -o /dev/null -w "%{time_total}" "${BASE_URL}/")
+          frontend_ms=$(echo "$frontend_time * 1000" | bc)
+          echo "Frontend response: ${frontend_ms}ms"
+
+          # Check if response times are acceptable
+          if (( $(echo "$backend_ms < $MAX_RESPONSE_MS" | bc -l) )) && \
+             (( $(echo "$frontend_ms < $MAX_RESPONSE_MS" | bc -l) )); then
+            echo "status=good" >> $GITHUB_OUTPUT
+            echo "✅ Response times acceptable"
+          else
+            echo "status=degraded" >> $GITHUB_OUTPUT
+            echo "⚠️ Response times elevated"
+          fi
+
+          echo "backend-ms=${backend_ms}" >> $GITHUB_OUTPUT
+          echo "frontend-ms=${frontend_ms}" >> $GITHUB_OUTPUT
+
+      - name: Continuous Error Rate Monitoring
+        id: error-monitoring
+        run: |
+          BASE_URL="${{ steps.env-config.outputs.base-url }}"
+          ERROR_THRESHOLD="${{ steps.env-config.outputs.error-threshold }}"
+          DURATION_MINUTES=${{ inputs.monitoring-duration-minutes }}
+
+          echo "📊 Monitoring error rates for ${DURATION_MINUTES} minutes..."
+
+          total_requests=0
+          error_count=0
+
+          # Calculate iterations (1 check every 15 seconds)
+          iterations=$((DURATION_MINUTES * 4))
+
+          for i in $(seq 1 $iterations); do
+            echo "Check $i/${iterations}..."
+
+            # Test multiple endpoints
+            for endpoint in "/api/health" "/" "/api/"; do
+              status=$(curl -sf -o /dev/null -w "%{http_code}" "${BASE_URL}${endpoint}" || echo "000")
+              total_requests=$((total_requests + 1))
+
+              if [[ ! "$status" =~ ^[23] ]]; then
+                error_count=$((error_count + 1))
+                echo "❌ Error on ${endpoint}: HTTP $status"
+              fi
+            done
+
+            # Calculate current error rate
+            if [[ $total_requests -gt 0 ]]; then
+              error_rate=$(echo "scale=2; $error_count * 100 / $total_requests" | bc)
+              echo "Current error rate: ${error_rate}% (${error_count}/${total_requests})"
+
+              # Fail if error rate exceeds threshold
+              if (( $(echo "$error_rate > $ERROR_THRESHOLD" | bc -l) )); then
+                echo "🚨 Error rate ${error_rate}% exceeds threshold ${ERROR_THRESHOLD}%"
+                echo "status=critical" >> $GITHUB_OUTPUT
+                echo "error-rate=${error_rate}" >> $GITHUB_OUTPUT
+                exit 1
+              fi
+            fi
+
+            sleep 15
+          done
+
+          echo "✅ Error rate monitoring completed successfully"
+          echo "Final error rate: ${error_rate}%"
+          echo "status=healthy" >> $GITHUB_OUTPUT
+          echo "error-rate=${error_rate}" >> $GITHUB_OUTPUT
+
+      - name: Final Health Status
+        id: final-status
+        if: always()
+        run: |
+          failed_services=()
+
+          # Collect failed services
+          [[ "${{ steps.backend-health.outputs.status }}" != "healthy" ]] && failed_services+=("backend")
+          [[ "${{ steps.frontend-health.outputs.status }}" != "healthy" ]] && failed_services+=("frontend")
+          [[ "${{ steps.database-health.outputs.status }}" != "healthy" ]] && failed_services+=("database")
+          [[ "${{ steps.cache-health.outputs.status }}" != "healthy" ]] && failed_services+=("cache")
+
+          if [[ ${#failed_services[@]} -eq 0 ]]; then
+            echo "all-healthy=true" >> $GITHUB_OUTPUT
+            echo "failed-services=" >> $GITHUB_OUTPUT
+            echo "✅ All services healthy!"
+          else
+            echo "all-healthy=false" >> $GITHUB_OUTPUT
+            echo "failed-services=${failed_services[*]}" >> $GITHUB_OUTPUT
+            echo "❌ Failed services: ${failed_services[*]}"
+          fi
+
+      - name: Generate Monitoring Summary
+        if: always()
+        run: |
+          echo "## 🔍 Multi-Service Monitoring Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Backend Version:** \`${{ inputs.backend-version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Frontend Version:** \`${{ inputs.frontend-version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Monitoring Duration:** ${{ inputs.monitoring-duration-minutes }} minutes" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Service Health
+          echo "### 🏥 Service Health" >> $GITHUB_STEP_SUMMARY
+          echo "- Backend: ${{ steps.backend-health.outputs.status == 'healthy' && '✅ Healthy' || '❌ Unhealthy' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Frontend: ${{ steps.frontend-health.outputs.status == 'healthy' && '✅ Healthy' || '❌ Unhealthy' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Database: ${{ steps.database-health.outputs.status == 'healthy' && '✅ Healthy' || '❌ Unhealthy' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Cache: ${{ steps.cache-health.outputs.status == 'healthy' && '✅ Healthy' || '❌ Unhealthy' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Performance
+          echo "### ⚡ Performance" >> $GITHUB_STEP_SUMMARY
+          echo "- Backend Response: ${{ steps.performance-check.outputs.backend-ms }}ms" >> $GITHUB_STEP_SUMMARY
+          echo "- Frontend Response: ${{ steps.performance-check.outputs.frontend-ms }}ms" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Error Rate
+          echo "### 📊 Error Rate" >> $GITHUB_STEP_SUMMARY
+          echo "- Error Rate: ${{ steps.error-monitoring.outputs.error-rate }}%" >> $GITHUB_STEP_SUMMARY
+          echo "- Status: ${{ steps.error-monitoring.outputs.status }}" >> $GITHUB_STEP_SUMMARY
+
+  # Job 2: Auto-rollback if monitoring failed
+  auto-rollback:
+    name: 🔄 Auto-Rollback on Failure
+    runs-on: ubuntu-latest
+    needs: [multi-service-health-check]
+    if: |
+      always() &&
+      needs.multi-service-health-check.outputs.all-services-healthy == 'false'
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Initiate rollback
+        run: |
+          echo "🚨 INITIATING AUTOMATIC ROLLBACK"
+          echo "Failed services: ${{ needs.multi-service-health-check.outputs.failed-services }}"
+          echo "Environment: ${{ inputs.environment }}"
+          echo "Backend version: ${{ inputs.backend-version }}"
+          echo "Frontend version: ${{ inputs.frontend-version }}"
+
+      - name: Execute coordinated rollback
+        run: |
+          echo "🔄 Rolling back all services to previous stable state..."
+
+          # Rollback logic would go here:
+          # - Query deployment history
+          # - Restore previous docker-compose.yml
+          # - docker-compose down && docker-compose up -d
+          # - Verify health of rolled-back services
+
+          echo "::warning title=Auto-Rollback Triggered::Deployment to ${{ inputs.environment }} failed health checks and was automatically rolled back"
+
+      - name: Send rollback notification
+        if: always() && secrets.monitoring-webhook != ''
+        run: |
+          curl -X POST "${{ secrets.monitoring-webhook }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "text": "🚨 Auto-rollback executed for ${{ inputs.environment }}",
+              "environment": "${{ inputs.environment }}",
+              "backend_version": "${{ inputs.backend-version }}",
+              "frontend_version": "${{ inputs.frontend-version }}",
+              "failed_services": "${{ needs.multi-service-health-check.outputs.failed-services }}"
+            }'

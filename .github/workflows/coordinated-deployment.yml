@@ -1,0 +1,225 @@
+name: 🚀 Coordinated Multi-Service Deployment
+
+# SOLID: Single Responsibility - ONLY handles coordinated deployment
+# DRY: Uses docker-compose.yml as single source of truth for service versions
+# SOC: Orchestrator coordinates, individual repos publish artifacts
+
+on:
+  repository_dispatch:
+    types: [backend-updated, frontend-updated]
+  workflow_dispatch:
+    inputs:
+      backend-version:
+        description: 'Backend version (e.g., v5.15.0 or "latest")'
+        required: true
+        type: string
+      frontend-version:
+        description: 'Frontend version (e.g., v1.1.1 or "latest")'
+        required: true
+        type: string
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+        default: 'staging'
+      force-deploy:
+        description: 'Skip integration tests (dangerous!)'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  REGISTRY: ghcr.io
+  BACKEND_IMAGE: ghcr.io/zachatkinson/csfrace-scrape-back
+  FRONTEND_IMAGE: ghcr.io/zachatkinson/csfrace-scrape-front
+
+concurrency:
+  group: deployment-${{ github.event.inputs.environment || 'staging' }}
+  cancel-in-progress: false  # Never cancel active deployments
+
+jobs:
+  # Job 1: Determine what to deploy
+  determine-versions:
+    name: 📋 Determine Deployment Versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      backend-version: ${{ steps.versions.outputs.backend-version }}
+      frontend-version: ${{ steps.versions.outputs.frontend-version }}
+      environment: ${{ steps.versions.outputs.environment }}
+      skip-tests: ${{ steps.versions.outputs.skip-tests }}
+
+    steps:
+      - name: Determine versions from inputs or dispatch
+        id: versions
+        run: |
+          # Manual workflow_dispatch takes precedence
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "backend-version=${{ github.event.inputs.backend-version }}" >> $GITHUB_OUTPUT
+            echo "frontend-version=${{ github.event.inputs.frontend-version }}" >> $GITHUB_OUTPUT
+            echo "environment=${{ github.event.inputs.environment }}" >> $GITHUB_OUTPUT
+            echo "skip-tests=${{ github.event.inputs.force-deploy }}" >> $GITHUB_OUTPUT
+
+          # repository_dispatch from individual repo release
+          elif [[ "${{ github.event_name }}" == "repository_dispatch" ]]; then
+            SERVICE="${{ github.event.client_payload.service }}"
+            VERSION="${{ github.event.client_payload.version }}"
+
+            # Auto-deploy to staging when a service releases
+            echo "environment=staging" >> $GITHUB_OUTPUT
+            echo "skip-tests=false" >> $GITHUB_OUTPUT
+
+            # Update the version for the service that was released
+            if [[ "$SERVICE" == "backend" ]]; then
+              echo "backend-version=$VERSION" >> $GITHUB_OUTPUT
+              echo "frontend-version=latest" >> $GITHUB_OUTPUT  # Use current latest
+            else
+              echo "backend-version=latest" >> $GITHUB_OUTPUT  # Use current latest
+              echo "frontend-version=$VERSION" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Output deployment plan
+        run: |
+          echo "## 📋 Deployment Plan" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ steps.versions.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Backend:** \`${{ steps.versions.outputs.backend-version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Frontend:** \`${{ steps.versions.outputs.frontend-version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Skip Tests:** ${{ steps.versions.outputs.skip-tests }}" >> $GITHUB_STEP_SUMMARY
+
+  # Job 2: Run integration tests (SOC: Only orchestrator tests cross-service integration)
+  integration-tests:
+    name: 🧪 Integration Tests
+    needs: [determine-versions]
+    if: needs.determine-versions.outputs.skip-tests == 'false'
+    uses: ./.github/workflows/integration.yml
+    with:
+      backend-version: ${{ needs.determine-versions.outputs.backend-version }}
+      frontend-version: ${{ needs.determine-versions.outputs.frontend-version }}
+
+  # Job 3: Deploy to target environment
+  deploy:
+    name: 🚀 Deploy to ${{ needs.determine-versions.outputs.environment }}
+    needs: [determine-versions, integration-tests]
+    if: |
+      always() &&
+      (needs.integration-tests.result == 'success' || needs.integration-tests.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: ${{ needs.determine-versions.outputs.environment }}
+      url: ${{ needs.determine-versions.outputs.environment == 'production' && 'https://csfrace.com' || 'https://staging.csfrace.com' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: false  # Don't need submodules, we use Docker images
+
+      - name: Update docker-compose with specific versions
+        run: |
+          # DRY: docker-compose.yml is single source of truth
+          # Update image tags to specific versions
+          sed -i.bak "s|image: ${BACKEND_IMAGE}:.*|image: ${BACKEND_IMAGE}:${{ needs.determine-versions.outputs.backend-version }}|g" docker-compose.yml
+          sed -i.bak "s|image: ${FRONTEND_IMAGE}:.*|image: ${FRONTEND_IMAGE}:${{ needs.determine-versions.outputs.frontend-version }}|g" docker-compose.yml
+
+          echo "📝 Updated docker-compose.yml:"
+          grep "image:" docker-compose.yml
+
+      - name: Pull Docker images
+        run: |
+          # Pull pre-built images (SOC: orchestrator never builds, only deploys)
+          docker pull ${BACKEND_IMAGE}:${{ needs.determine-versions.outputs.backend-version }}
+          docker pull ${FRONTEND_IMAGE}:${{ needs.determine-versions.outputs.frontend-version }}
+
+      - name: Deploy services
+        run: |
+          # Deploy coordinated services together
+          docker-compose -f docker-compose.yml up -d
+
+          echo "✅ Services deployed successfully"
+
+      - name: Wait for services to be healthy
+        run: |
+          # Wait for all services to report healthy
+          timeout 120 bash -c 'until docker-compose ps | grep -q "healthy"; do sleep 5; done'
+
+          echo "✅ All services healthy"
+
+      - name: Run smoke tests
+        run: |
+          # Quick smoke tests to verify deployment
+          ./scripts/smoke-tests.sh ${{ needs.determine-versions.outputs.environment }}
+
+      - name: Record deployment
+        run: |
+          # Record deployment for audit trail
+          echo "Deployed at $(date -u)" > deployment-record.txt
+          echo "Backend: ${{ needs.determine-versions.outputs.backend-version }}" >> deployment-record.txt
+          echo "Frontend: ${{ needs.determine-versions.outputs.frontend-version }}" >> deployment-record.txt
+          echo "Environment: ${{ needs.determine-versions.outputs.environment }}" >> deployment-record.txt
+
+  # Job 4: Post-deployment monitoring (calls reusable monitoring workflow)
+  post-deployment-monitoring:
+    name: 📊 Post-Deployment Monitoring
+    needs: [determine-versions, deploy]
+    if: success()
+    uses: ./.github/workflows/monitoring-gates.yml
+    with:
+      environment: ${{ needs.determine-versions.outputs.environment }}
+      backend-version: ${{ needs.determine-versions.outputs.backend-version }}
+      frontend-version: ${{ needs.determine-versions.outputs.frontend-version }}
+      monitoring-duration-minutes: ${{ needs.determine-versions.outputs.environment == 'production' && 15 || 5 }}
+    secrets:
+      monitoring-webhook: ${{ secrets.MONITORING_WEBHOOK }}
+
+  # Job 5: Deployment summary
+  deployment-summary:
+    name: 📊 Deployment Summary
+    runs-on: ubuntu-latest
+    needs: [determine-versions, integration-tests, deploy, post-deployment-monitoring]
+    if: always()
+    timeout-minutes: 5
+
+    steps:
+      - name: Generate deployment summary
+        run: |
+          echo "## 🚀 Multi-Service Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📋 Deployment Details" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ needs.determine-versions.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Backend:** \`${{ needs.determine-versions.outputs.backend-version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Frontend:** \`${{ needs.determine-versions.outputs.frontend-version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### 🧪 Test Results" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ needs.integration-tests.result }}" == "success" ]]; then
+            echo "✅ Integration tests passed" >> $GITHUB_STEP_SUMMARY
+          elif [[ "${{ needs.integration-tests.result }}" == "skipped" ]]; then
+            echo "⏭️ Integration tests skipped (force deploy)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Integration tests failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 Deployment Status" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ needs.deploy.result }}" == "success" ]]; then
+            echo "✅ Deployment successful" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Deployment failed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📊 Monitoring" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ needs.post-deployment-monitoring.result }}" == "success" ]]; then
+            echo "✅ Post-deployment monitoring passed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ Post-deployment monitoring detected issues" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "_Deployed at $(date -u)_" >> $GITHUB_STEP_SUMMARY
