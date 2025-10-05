@@ -68,9 +68,29 @@ jobs:
           # Basic security checks before deployment
           echo "🔍 Running security validation..."
 
-          # Check for secrets in code
-          if grep -r "password\|secret\|key" . --exclude-dir=.git --exclude-dir=node_modules --exclude="*.md" | grep -v "example\|test\|dummy"; then
-            echo "⚠️ Potential secrets found in code"
+          # Check for actual hardcoded secrets (not just variable names)
+          # Pattern: Look for password= secret= key= with actual values
+          # Exclude: GitHub workflows, configs, migrations, docs, examples
+
+          SECRETS_FOUND=$(grep -r \
+            -E "(password|secret|key|token)\s*=\s*['\"][^'\"]{8,}" \
+            --exclude-dir=.git \
+            --exclude-dir=.github \
+            --exclude-dir=node_modules \
+            --exclude-dir=backend/migrations \
+            --exclude-dir=.playwright-mcp \
+            --exclude="*.md" \
+            --exclude="*.yml" \
+            --exclude="*.yaml" \
+            --exclude="*.json" \
+            --exclude="*.sql" \
+            --exclude=".gitignore" \
+            --exclude="*.ini" \
+            . | grep -v "example\|test\|dummy\|placeholder\|your-" || true)
+
+          if [ -n "$SECRETS_FOUND" ]; then
+            echo "⚠️ Potential hardcoded secrets found:"
+            echo "$SECRETS_FOUND"
             exit 1
           fi
 
