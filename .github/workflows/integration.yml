@@ -84,7 +84,7 @@ jobs:
 
       - name: Install API testing dependencies
         run: |
-          npm install -g newman @apidevtools/swagger-parser
+          npm install -g newman @apidevtools/swagger-cli
           npm install
 
       - name: Start services for API testing
@@ -114,7 +114,7 @@ jobs:
         run: |
           # Download and validate backend OpenAPI schema
           curl -f http://localhost:${BACKEND_PORT}/openapi.json > backend-schema.json
-          swagger-parser validate backend-schema.json
+          swagger-cli validate backend-schema.json
 
       - name: Run API Contract Tests
         run: |
