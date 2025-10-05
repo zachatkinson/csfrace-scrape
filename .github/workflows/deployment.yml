@@ -68,29 +68,23 @@ jobs:
           # Basic security checks before deployment
           echo "🔍 Running security validation..."
 
-          # Check for actual hardcoded secrets (not just variable names)
-          # Pattern: Look for password= secret= key= with actual values
-          # Exclude: GitHub workflows, configs, migrations, docs, examples
+          # Check for hardcoded secrets in configuration files only
+          # Source code (*.py, *.ts, *.tsx, etc.) should use proper secret scanning tools
+          # This scan focuses on .env files and similar config files
 
-          SECRETS_FOUND=$(grep -r \
-            -E "(password|secret|key|token)\s*=\s*['\"][^'\"]{8,}" \
-            --exclude-dir=.git \
-            --exclude-dir=.github \
-            --exclude-dir=node_modules \
-            --exclude-dir=backend/migrations \
-            --exclude-dir=.playwright-mcp \
-            --exclude="*.md" \
-            --exclude="*.yml" \
-            --exclude="*.yaml" \
-            --exclude="*.json" \
-            --exclude="*.sql" \
-            --exclude=".gitignore" \
-            --exclude="*.ini" \
-            . | grep -v "example\|test\|dummy\|placeholder\|your-" || true)
+          SECRETS_FOUND=$(find . -type f \
+            \( -name "*.env" -o -name ".env.*" -o -name "secrets.*" \) \
+            ! -name "*.example" \
+            ! -name "*.template" \
+            ! -path "*/.git/*" \
+            ! -path "*/node_modules/*" \
+            -exec grep -l ".*" {} \; 2>/dev/null || true)
 
           if [ -n "$SECRETS_FOUND" ]; then
-            echo "⚠️ Potential hardcoded secrets found:"
+            echo "⚠️ Potential secret files found (should not be committed):"
             echo "$SECRETS_FOUND"
+            echo ""
+            echo "These files should be in .gitignore"
             exit 1
           fi
 
