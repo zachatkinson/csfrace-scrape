@@ -63,8 +63,8 @@ services:
   # Frontend - Testing Configuration
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: Dockerfile.frontend.test
       args:
         NODE_ENV: production
         PUBLIC_API_BASE_URL: http://localhost:8001

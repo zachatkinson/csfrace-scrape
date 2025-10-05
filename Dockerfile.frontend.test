@@ -1,0 +1,70 @@
+# Test-specific Dockerfile for frontend
+# Extends the frontend Dockerfile with test environment variable support
+
+ARG BUILDPLATFORM=linux/amd64
+FROM --platform=${BUILDPLATFORM} node:20-alpine
+
+# Install pnpm globally
+RUN npm install -g pnpm@9
+
+# Set working directory
+WORKDIR /app
+
+# Create non-root user for security
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S astro -u 1001
+
+# Copy package files first for better layer caching
+COPY frontend/package.json frontend/pnpm-lock.yaml ./
+
+# Build arguments for environment variables
+ARG NODE_ENV=production
+ARG PUBLIC_API_BASE_URL=http://localhost:8001
+ARG SERVER_API_BASE_URL=http://backend:8000
+
+# Set environment variables for build
+ENV NODE_ENV=${NODE_ENV}
+ENV PUBLIC_API_BASE_URL=${PUBLIC_API_BASE_URL}
+ENV SERVER_API_BASE_URL=${SERVER_API_BASE_URL}
+
+# Install dependencies conditionally based on NODE_ENV
+RUN if [ "$NODE_ENV" = "development" ]; then \
+        pnpm install --frozen-lockfile; \
+    else \
+        pnpm install --frozen-lockfile --production=false && \
+        pnpm run build && \
+        pnpm prune --production; \
+    fi
+
+# CRITICAL LIGHTNINGCSS FIX: Create pkg directory and copy WASM files
+RUN mkdir -p node_modules/.pnpm/lightningcss@1.30.1/node_modules/lightningcss/pkg && \
+    cp -r node_modules/.pnpm/lightningcss-wasm@1.30.2/node_modules/lightningcss-wasm/* \
+          node_modules/.pnpm/lightningcss@1.30.1/node_modules/lightningcss/pkg/ 2>/dev/null || true
+
+# Copy source code and ensure proper ownership
+COPY --chown=astro:nodejs frontend/ .
+
+# Ensure the astro user has write permissions to the entire app directory
+RUN chown -R astro:nodejs /app
+
+# Build only in production (when not already built above)
+RUN if [ "$NODE_ENV" = "production" ] && [ ! -d "dist" ]; then \
+        pnpm run build; \
+    fi
+
+# Switch to non-root user
+USER astro
+
+# Set default environment variables
+ENV HOST=0.0.0.0
+ENV PORT=3000
+
+# Expose port
+EXPOSE 3000
+
+# Health check that works for both dev and prod
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:3000/', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
+
+# Start the application based on NODE_ENV
+CMD ["sh", "-c", "if [ \"$NODE_ENV\" = \"development\" ]; then pnpm run dev --host 0.0.0.0 --port 3000; else pnpm run preview --host 0.0.0.0 --port 3000; fi"]
