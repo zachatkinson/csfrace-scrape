@@ -30,6 +30,18 @@ on:
           - api_contracts
           - e2e
           - performance
+  workflow_call:
+    inputs:
+      backend-version:
+        description: 'Backend version to test (e.g., v5.15.0 or "latest")'
+        required: false
+        type: string
+        default: 'latest'
+      frontend-version:
+        description: 'Frontend version to test (e.g., v1.1.1 or "latest")'
+        required: false
+        type: string
+        default: 'latest'
 
 env:
   COMPOSE_PROJECT_NAME: csfrace-integration
