@@ -17,8 +17,8 @@ curl http://localhost:8000/auth/oauth/providers
 
 ### ✅ OAuth Flow Initiation
 ```bash
-# Facebook OAuth redirect is working
-curl -sL "http://localhost:8000/auth/oauth/facebook"
+# Facebook OAuth redirect is working (via nginx HTTPS proxy)
+curl -sL "https://localhost/auth/oauth/facebook" -k
 # Successfully redirects to Facebook login page
 ```
 
@@ -35,7 +35,7 @@ The backend correctly generates Facebook OAuth authorization URLs with:
 
 1. **Open the application:**
    ```
-   http://localhost:3000
+   https://localhost
    ```
 
 2. **Click "Sign In" or "Register"**
@@ -48,21 +48,21 @@ The backend correctly generates Facebook OAuth authorization URLs with:
    - You'll be redirected to Facebook login
    - Login with your Facebook account
    - Authorize the app to access email and public profile
-   - You'll be redirected back to localhost:3000
+   - You'll be redirected back to https://localhost
    - You should be logged in!
 
 ### Option 2: Via Direct URL
 
 1. **Navigate directly to OAuth endpoint:**
    ```
-   http://localhost:8000/auth/oauth/facebook
+   https://localhost/auth/oauth/facebook
    ```
 
 2. **Complete Facebook login**
 
 3. **You'll be redirected to callback:**
    ```
-   http://localhost:8000/auth/oauth/facebook/callback?code=...&state=...
+   https://localhost/auth/oauth/facebook/callback?code=...&state=...
    ```
 
 4. **Backend will:**
@@ -80,9 +80,10 @@ Go to: Facebook Login → Settings
 
 Add these exact URIs:
 ```
-http://localhost:8000/auth/oauth/facebook/callback
-http://localhost:3000/auth/oauth/facebook/callback
+https://localhost/auth/oauth/facebook/callback
 ```
+
+**Note:** In Development Mode, Facebook automatically allows `http://localhost` redirects, but using `https://localhost` works better with your nginx setup.
 
 ### 2. App Domains
 Go to: Settings → Basic
@@ -210,14 +211,14 @@ When a user logs in with Facebook, your backend receives:
 ## Quick Commands
 
 ```bash
-# Check if Facebook is available
-curl http://localhost:8000/auth/oauth/providers | jq
+# Check if Facebook is available (via nginx)
+curl https://localhost/auth/oauth/providers -k | jq
 
 # Get Facebook authorization URL (will redirect)
-curl -sI http://localhost:8000/auth/oauth/facebook
+curl -sI https://localhost/auth/oauth/facebook -k
 
-# Check backend health
-curl http://localhost:8000/health/ | jq
+# Check backend health (via nginx)
+curl https://localhost/health -k | jq
 
 # Restart backend (if you change .env)
 docker compose restart backend
@@ -227,7 +228,7 @@ docker compose logs -f backend | grep -i facebook
 
 # Check connected OAuth accounts (requires auth token)
 curl -H "Authorization: Bearer YOUR_TOKEN" \
-  http://localhost:8000/auth/oauth/connections
+  https://localhost/auth/oauth/connections -k
 ```
 
 ## Success Indicators
@@ -264,7 +265,7 @@ URL: https://localhost/auth/oauth/facebook/data-deletion
 
 **Option 2: Instructions URL (Simpler for Development)**
 ```
-URL: https://localhost:3000/privacy/facebook-data-deletion
+URL: https://localhost/privacy/facebook-data-deletion
 ```
 
 **Instructions page provides:**
@@ -275,7 +276,7 @@ URL: https://localhost:3000/privacy/facebook-data-deletion
 
 **Configure in Meta Developer Console:**
 1. Go to: Settings → Basic → Data Deletion Instructions URL
-2. Add: `https://localhost:3000/privacy/facebook-data-deletion`
+2. Add: `https://localhost/privacy/facebook-data-deletion`
 
 ### Which One to Use?
 
@@ -290,7 +291,7 @@ URL: https://localhost:3000/privacy/facebook-data-deletion
 
 ## Status: READY TO TEST! 🚀
 
-Your Facebook OAuth is fully configured and ready to use. Just open http://localhost:3000 and try it out!
+Your Facebook OAuth is fully configured and ready to use. Just open **https://localhost** (via nginx) and try it out!
 
 ### Additional Setup for Live Mode:
 - [ ] Configure Data Deletion URL in Meta Developer Console
