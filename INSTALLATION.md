@@ -2,6 +2,26 @@
 
 Complete installation guide for macOS and Windows.
 
+## 🎯 Platform-Specific Guides
+
+**Choose your operating system for detailed instructions:**
+
+- **[macOS Installation Guide →](INSTALLATION-MAC.md)**
+  - Intel and Apple Silicon (M1/M2/M3) support
+  - Homebrew installation options
+  - macOS-specific troubleshooting
+
+- **[Windows Installation Guide →](INSTALLATION-WINDOWS.md)**
+  - Windows 10/11 with WSL 2
+  - PowerShell and Command Prompt examples
+  - Windows-specific troubleshooting
+
+---
+
+## Overview
+
+This guide covers the basic installation process. For platform-specific details, performance tuning, and troubleshooting, see the guides above.
+
 ## Prerequisites
 
 ### Required Software
