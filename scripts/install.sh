@@ -22,8 +22,8 @@ echo "🔨 Building Docker images..."
 echo "   (First time: 5-10 minutes on ARM64 Macs, faster on AMD64)"
 echo ""
 
-# Build with progress output
-docker compose build
+# Build with progress output (redirect to show progress but not hang)
+docker compose build 2>&1 | cat
 
 echo ""
 echo "🚢 Starting services..."
