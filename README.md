@@ -61,7 +61,7 @@
 ```bash
 git clone https://github.com/zachatkinson/csfrace-scrape.git
 cd csfrace-scrape
-./scripts/test-fresh-install-mac.sh
+./scripts/install.sh
 ```
 
 **Windows (PowerShell):**
@@ -70,6 +70,8 @@ git clone https://github.com/zachatkinson/csfrace-scrape.git
 cd csfrace-scrape
 .\scripts\test-fresh-install-windows.ps1
 ```
+
+**Note:** First-time build takes 5-10 minutes (ARM64 Macs may be slower due to Rosetta 2 emulation). Subsequent starts are instant using cached images.
 
 The automated script handles:
 - ✅ Complete cleanup of existing containers/volumes
