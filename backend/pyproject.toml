@@ -1,0 +1,394 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "csfrace-scraper"
+version = "5.19.1"
+description = "WordPress to Shopify content converter for CSFrace website migration with strict type safety"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "CSFrace Development Team", email = "dev@csfrace.com"}
+]
+maintainers = [
+    {name = "CSFrace Development Team", email = "dev@csfrace.com"}
+]
+keywords = ["scraping", "wordpress", "shopify", "content-migration"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP :: Browsers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Text Processing :: Markup :: HTML",
+]
+requires-python = ">=3.13"
+dependencies = [
+    "aiofiles>=24.1.0", # Latest async file operations
+    "aiohttp>=3.12.0", # Latest with security and performance improvements
+    "alembic>=1.16.0", # Latest database migration tool
+    "asyncio-throttle>=1.0.2", # Latest rate limiting
+    "asyncpg>=0.30.0", # Latest PostgreSQL driver
+    "beautifulsoup4>=4.13.0", # Latest HTML parser
+    "bleach>=6.2.0", # Latest HTML sanitizer
+    "fastapi[standard]>=0.116.0", # Latest FastAPI with all standard features
+    "lxml>=5.0.0", # Latest XML/HTML processing library
+    "playwright>=1.51.0", # Latest browser automation
+    "psycopg[binary]>=3.2.0", # Latest PostgreSQL adapter
+    "pydantic>=2.11.0", # Latest data validation library
+    "pydantic-settings>=2.10.0", # Latest settings management
+    "PyYAML>=6.0.2", # Latest YAML processor
+    "rich>=14.1.0", # Latest available terminal formatting
+    "sqlalchemy[asyncio]>=2.0.36", # Latest ORM
+    "structlog>=24.5.0", # Latest structured logging
+    "tenacity>=9.0.0", # Latest retry library
+    "tinycss2>=1.4.0", # Required by bleach for CSS sanitization
+    # 🔐 Enterprise Authentication Stack - 2025 Industry Standards
+    "pyjwt>=2.10.1", # Latest available JWT library
+    "passlib[bcrypt]>=1.7.4", # Latest password hashing
+    "slowapi>=0.1.9", # Latest rate limiting middleware
+    "authlib>=1.6.5", # Latest OAuth2 library with CVE-2025-61920 (DoS via Oversized JOSE) security fix
+    "webauthn>=2.7.0", # Latest WebAuthn/FIDO2
+    "types-passlib>=1.7.7.20250602", # Type stubs
+    "prometheus-client>=0.22.1", # Latest available metrics client
+    "sentry-sdk>=2.37.0", # Latest error tracking
+    "opentelemetry-api>=1.36.0",
+    "opentelemetry-sdk>=1.36.0",
+    "psutil>=6.1.1", # Latest system resource monitoring library
+    "redis>=5.2.1", # Latest Redis client for caching
+    "ruff>=0.13.0",
+    "mypy>=1.18.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    # Modern Python linting stack (2025 best practices)
+    "ruff>=0.13.0",      # Latest Ruff with linting AND formatting (replaces Black)
+    "mypy>=1.18.1",      # Latest available MyPy
+    
+    # Development tools  
+    "autoflake>=2.3.1", # Latest available unused import detection
+    "pre-commit>=4.0.1", # Latest with improved hook management
+    
+    # Security & audit (Safety disabled locally - runs in CI only)
+    "pip-audit>=2.7.4", # Latest vulnerability scanner 
+    "detect-secrets>=1.5.0", # Latest secret detection
+    
+    # Type stubs
+    "types-psutil>=5.9.0",
+]
+test = [
+    "pytest>=8.3.0", # Latest with improved fixtures and performance
+    "pytest-asyncio>=0.25.0", # Latest with better async support
+    "pytest-cov>=6.3.0", # Latest with improved coverage reporting
+    "pytest-benchmark>=5.0.1", # Latest with better benchmarking
+    "pytest-mock>=3.15.0", # Latest with improved mocking
+    "pytest-split>=0.9.0", # Latest for matrix-based test sharding
+    "pytest-xdist>=3.6.5",  # Latest for parallel test execution
+    "pytest-postgresql>=6.1.3",  # Latest PostgreSQL test fixtures
+    "testcontainers>=4.10.0",  # Latest container management
+    "aioresponses>=0.7.8", # Latest async HTTP mocking
+    "hypothesis>=6.138.15", # Latest property-based testing
+    "factory-boy>=3.3.1", # Latest test factory
+    "freezegun>=1.2.5", # Latest time mocking
+    "memory-profiler>=0.61.0", # Already latest
+]
+monitoring = [
+    "prometheus-client>=0.22.1", # Latest available metrics client
+    "sentry-sdk>=2.37.0", # Latest error tracking
+    "opentelemetry-api>=1.36.0", # Latest OpenTelemetry API
+    "opentelemetry-sdk>=1.36.0", # Latest OpenTelemetry SDK
+    "opentelemetry-exporter-otlp>=1.36.0", # Latest OTLP exporter
+    "opentelemetry-instrumentation-fastapi>=0.57b0", # Latest FastAPI instrumentation
+    "opentelemetry-instrumentation-aiohttp-client>=0.57b0", # Latest aiohttp instrumentation
+    "opentelemetry-instrumentation-sqlalchemy>=0.57b0", # Latest SQLAlchemy instrumentation
+    "opentelemetry-propagator-b3>=1.36.0", # Latest B3 propagator
+]
+docs = [
+    "sphinx>=8.1.3", # Latest documentation generator
+    "sphinx-rtd-theme>=3.0.2", # Latest Read the Docs theme
+    "myst-parser>=4.0.0", # Latest Markdown parser
+]
+
+[project.urls]
+Homepage = "https://github.com/zachatkinson/csfrace-scrape"
+Documentation = "https://github.com/zachatkinson/csfrace-scrape#readme"
+Repository = "https://github.com/zachatkinson/csfrace-scrape.git"
+"Bug Tracker" = "https://github.com/zachatkinson/csfrace-scrape/issues"
+
+[tool.uv]
+# Disable Safety repository locally - use standard PyPI for all packages
+index-url = "https://pypi.org/simple"
+
+[project.scripts]
+csfrace-scraper = "src.main:main"
+
+# Ruff handles both linting and formatting (replaces Black)
+
+# Import sorting handled by Ruff (no separate isort config needed)
+
+# Ruff configuration (replaces flake8, isort, and more)
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+exclude = [
+    ".git",
+    ".venv",
+    ".tox",
+    "__pycache__",
+    "build",
+    "dist",
+    "*.egg-info",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+    "ARG", # flake8-unused-arguments
+    "SIM", # flake8-simplify
+    "TCH", # flake8-type-checking
+    "S",   # bandit (security)
+]
+ignore = [
+    "E501",  # line too long (handled by black)
+    "B008",  # do not perform function calls in argument defaults
+    "S101",  # use of assert (we use it in tests)
+    "S324",  # probable use of insecure hash functions (md5 is ok for hashing URLs)
+    "B904",  # within except clause, raise exceptions with raise ... from err (optional)
+    "ARG002", # unused method argument (common in interfaces)
+    "B027",  # empty method in abstract base class (allowed)
+    "S112",  # try-except-continue (acceptable pattern)
+    "B007",  # loop control variable not used (acceptable)
+    "S110",  # try-except-pass (acceptable for intentional cleanup logic)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S", "ARG", "SIM117", "B017", "F841"]  # Allow security issues, unused args, nested with, Exception assertions, unused vars in tests
+"src/monitoring/grafana.py" = ["S105"]  # Allow placeholder password constant that forces production password change
+"src/database/schema_manager.py" = ["S608"]  # SQL injection safe: identifiers validated as alphanumeric before use
+"src/config/rate_limits.py" = ["S105", "S106"]  # Allow rate limit strings (false positives for password detection)
+# SlowAPI rate limiting requires unused request parameters for middleware integration
+"src/auth/router.py" = ["ARG001"]  # SlowAPI request parameters required but not used in function body
+# SQLAlchemy forward references use string-quoted model names to avoid circular imports
+"src/database/models/auth.py" = ["F821"]  # SQLAlchemy forward reference to ScrapingJob model
+"src/database/models/jobs.py" = ["F821"]  # SQLAlchemy forward reference to User model
+"src/api/routers/jobs.py" = ["ARG001"]  # SlowAPI request parameters for rate limiting job creation
+"src/api/routers/batches.py" = ["ARG001"]  # SlowAPI request parameters for rate limiting batch creation
+"src/auth/oauth_service.py" = ["S105"]  # OAuth endpoint URLs are not passwords
+"fix_docstrings.py" = ["S105"]  # Test key for development script
+"docs/examples/tracing_integration_example.py" = ["S104"]  # Example server binding for documentation
+
+# Import sorting configuration (replaces isort)
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+known-third-party = [
+    "aiohttp",
+    "asyncio",
+    "beautifulsoup4", 
+    "bleach",
+    "click",
+    "httpx",
+    "pydantic",
+    "pytest",
+    "structlog",
+    "tenacity",
+]
+split-on-trailing-comma = true
+combine-as-imports = true
+
+# MyPy configuration following 2024-2025 best practices
+[tool.mypy]
+python_version = "3.13"
+strict = true  # Enables all optional error checking flags (recommended best practice)
+show_error_codes = true
+show_error_code_links = true  # New: provides detailed error explanations
+namespace_packages = true  # Required for OpenTelemetry (per official docs)
+plugins = ["pydantic.mypy"]  # Enable Pydantic mypy plugin for proper Field defaults
+
+# Additional strict settings beyond the built-in strict mode
+warn_unused_configs = true
+warn_return_any = true  # Already included in strict mode, but explicit for clarity
+
+# Follow all imports for complete type checking
+follow_imports = "normal"
+
+# Only ignore missing imports for third-party libraries without stubs
+[[tool.mypy.overrides]]
+module = [
+    "beautifulsoup4.*",
+    "bleach.*",
+    "memory_profiler.*",
+    "aioresponses.*",
+    "aiofiles.*",
+    "redis.*",
+    "opentelemetry.*",
+]
+ignore_missing_imports = true  # Required for optional dependencies without type stubs
+
+# Pytest configuration
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--cov=src",
+    "--cov-report=term-missing",
+    "--cov-report=html:htmlcov",
+    "--cov-report=xml",
+    "-ra",  # show all test results
+    "--tb=short",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests", 
+    "performance: marks tests as performance tests",
+    "e2e: marks tests as end-to-end tests",
+    "unit: marks tests as unit tests",
+]
+asyncio_mode = "auto"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
+# Coverage configuration
+[tool.coverage.run]
+source = ["src"]
+branch = true
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__init__.py",
+    "*/conftest.py",
+    "*/plugins/examples/*",  # Example plugins - not production code
+    "*/cli/grafana_cli.py",  # CLI tool - separate from core API
+    "*/monitoring/protocols.py",  # Protocol definitions only
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+    "if TYPE_CHECKING:",  # Type checking imports
+    "\\.\\.\\.",  # Ellipsis in protocol/abstract methods
+]
+skip_empty = true
+precision = 2
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+# Bandit security linting
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = ["B101"]  # Skip assert_used test
+
+# autoflake configuration
+[tool.autoflake]
+remove-all-unused-imports = true
+remove-unused-variables = true
+remove-duplicate-keys = true
+expand-star-imports = true
+
+
+# Python Semantic Release configuration - Best Practices 2025
+[tool.semantic_release]
+# Files to include in version commits
+assets = ["CHANGELOG.md"]
+
+version_toml = [
+    "pyproject.toml:project.version"  # Update project version in [project] section only
+]
+version_variables = [
+    "src/__init__.py:__version__"  # Also update package __version__ if it exists
+]
+
+# Build configuration - Official UV integration pattern per PSR documentation
+# Install UV in container, update lock file, and build with UV
+build_command = """
+python -m pip install uv
+uv lock --upgrade-package "$PACKAGE_NAME"
+git add uv.lock
+uv build
+"""
+build_command_env = []
+
+# Commit and changelog configuration - 2025 Best Practices
+commit_parser = "conventional"  # Use Conventional Commits standard
+commit_message = "chore(release): {version}\n\nAutomatically generated by python-semantic-release"
+
+# Remote configuration
+upload_to_pypi = false
+upload_to_release = true
+remove_dist = false
+
+# Branch configuration - Updated for python-semantic-release v9.21.1+ format
+[tool.semantic_release.branches.master]
+match = "(main|master)"
+prerelease = false
+
+# Version control
+allow_zero_version = false  
+major_on_zero = true
+
+# Enhanced changelog configuration - 2025 Best Practices
+[tool.semantic_release.changelog]
+changelog_file = "CHANGELOG.md"
+changelog = true
+mode = "update"
+exclude_commit_patterns = [
+    '''chore(?:\([^)]*?\))?: .+''',      # Ignore chore commits
+    '''docs(?:\([^)]*?\))?: .+''',       # Ignore documentation commits
+    '''ci(?:\([^)]*?\))?: .+''',         # Ignore CI configuration changes
+    '''style(?:\([^)]*?\))?: .+''',      # Ignore style-only changes
+]
+
+[tool.semantic_release.changelog.default_templates]
+output_format = "md"
+
+# Enhanced commit parser configuration - 2025 Standards
+[tool.semantic_release.commit_parser_options]
+allowed_tags = [
+    "build",
+    "chore", 
+    "ci",
+    "docs",
+    "feat",
+    "fix",
+    "perf",
+    "refactor",
+    "revert",
+    "style",
+    "test"
+]
+minor_tags = ["feat"]
+patch_tags = ["fix", "perf"]
+
+[dependency-groups]
+dev = [
+    "types-bleach>=6.2.0.20250809",
+    "types-psutil>=7.0.0.20250822",
+    "types-pyyaml>=6.0.12.20250822",
+]
+
