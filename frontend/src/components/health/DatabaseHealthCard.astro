@@ -1,0 +1,29 @@
+---
+// =============================================================================
+// DATABASE HEALTH CARD - SERVER ISLAND (DRY/SOLID)
+// =============================================================================
+// Single Responsibility: Database service health checking and display
+// Uses shared service checkers - no duplicate logic!
+// =============================================================================
+
+import { DatabaseServiceChecker } from '../../utils/serviceCheckers.ts';
+import BaseHealthCard from './BaseHealthCard.astro';
+
+// Server-side health check using shared service checker (DRY principle)
+const serviceResult = await DatabaseServiceChecker.checkHealth();
+
+// Database-specific metrics for display
+const details = [
+  { label: 'Database Size', value: String(serviceResult.metrics.size || 'Unknown'), key: 'size' },
+  { label: 'Active Connections', value: Number(serviceResult.metrics.connections) || 0, key: 'connections' },
+  { label: 'Query Time', value: String(serviceResult.metrics.queryTime || 'Unknown'), key: 'queryTime' }
+];
+---
+
+<!-- Server Island: Database Health Card -->
+<BaseHealthCard 
+  serviceName="PostgreSQL Database"
+  serviceResult={serviceResult}
+  icon="🐘"
+  details={details}
+/>

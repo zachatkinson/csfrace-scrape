@@ -1,0 +1,93 @@
+---
+/**
+ * Log Out Button Component - ASTRO MCP Best Practice
+ * Used only for authenticated state, following conditional rendering pattern
+ */
+---
+
+<!-- Log Out Button (for authenticated users) -->
+<button
+  id="logout-button"
+  class="glass-button px-4 py-2 text-red-400 hover:text-red-300 border-red-500/30 hover:border-red-500/50 transition-all duration-200 flex items-center space-x-2"
+  style="border-color: rgb(239 68 68 / 0.3) !important;"
+  aria-label="Log Out"
+>
+  <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+  </svg>
+  <span>Log Out</span>
+</button>
+
+<script>
+  // ASTRO MCP BEST PRACTICE: Dedicated logout functionality
+  // Following SOLID Single Responsibility Principle
+
+  import { createContextLogger } from '/src/utils/logger.js';
+
+  const logger = createContextLogger('LogOutButton');
+  
+  async function handleLogout() {
+    logger.info('🔐 Starting logout process...');
+    
+    // Immediately start fade-out animation for instant UI feedback
+    const logoutButton = document.getElementById('logout-button') as HTMLButtonElement;
+    if (logoutButton) {
+      logoutButton.style.transition = 'all 0.2s ease-out';
+      logoutButton.style.opacity = '0.5';
+      logoutButton.style.transform = 'scale(0.95)';
+      logoutButton.disabled = true;
+    }
+    
+    try {
+      // Call backend logout endpoint to clear httpOnly cookies
+      const response = await fetch('/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        logger.info('✅ Logout successful - cookies cleared');
+      } else if (response.status === 401) {
+        logger.warn('⚠️ Already logged out');
+      } else {
+        logger.warn('⚠️ Logout request failed, but continuing');
+      }
+    } catch (error) {
+      logger.warn('⚠️ Logout error, but continuing:', error);
+    }
+
+    // Clear non-sensitive client-side data (NOT tokens - those are in httpOnly cookies)
+    try {
+      // Only clear user-related data, not tokens
+      localStorage.removeItem('user_data');
+      sessionStorage.removeItem('user_data');
+      logger.info('💾 Client-side user data cleared');
+    } catch (error) {
+      logger.warn('⚠️ Error clearing storage, but continuing logout:', error);
+    }
+    
+    // Dispatch logout event for other components to react
+    window.dispatchEvent(new CustomEvent('user-logged-out'));
+    
+    // Wait for UI components to update before reloading
+    // This prevents the flash where logout button stays visible
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    logger.info('🔄 Performing hard reload to complete logout...');
+    
+    // Force a hard reload which will clear any cached authentication state
+    // and force the browser to re-evaluate all authentication cookies
+    window.location.href = window.location.origin + '?logout=true&t=' + Date.now();
+  }
+  
+  // Initialize logout button handler
+  document.addEventListener('DOMContentLoaded', () => {
+    const logoutButton = document.getElementById('logout-button');
+    if (logoutButton) {
+      logoutButton.addEventListener('click', handleLogout);
+    }
+  });
+</script>

@@ -1,0 +1,1497 @@
+---
+/**
+ * UserSettingsModal - User account settings modal with passkey, SSO, and account management
+ * Following Astro best practices: HTML by default, JavaScript when needed
+ * DRY: Uses BaseModal for consistent behavior
+ * SOLID: Single responsibility for user settings UI
+ */
+
+import BaseModal from '../common/BaseModal.astro';
+import SectionDivider from '../common/SectionDivider.astro';
+import OAuthConnectionCard from '../auth/oauth/OAuthConnectionCard.astro';
+---
+
+<!-- User Settings Modal using DRY/SOLID BaseModal -->
+<BaseModal 
+  id="user-settings-modal" 
+  closeButtonId="user-settings-close"
+  maxWidth="max-w-2xl"
+  backdropBlur={true}
+>
+  <div class="liquid-glass rounded-glass p-6 border border-white/20 user-settings">
+    <!-- Header -->
+    <div class="mb-6">
+      <h3 class="text-xl font-bold text-white">User Settings</h3>
+      <p class="text-white/70 text-sm mt-1 mb-4">Manage your account, passkeys, and connected services</p>
+    </div>
+
+    <!-- Loading State -->
+    <div id="settings-loading" class="hidden text-center py-8">
+      <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400"></div>
+      <p class="mt-2 text-white/70">Loading user settings...</p>
+    </div>
+
+    <!-- Error State -->
+    <div id="settings-error" class="hidden bg-red-500/20 border border-red-500/30 rounded-glass p-4">
+      <div class="flex">
+        <svg class="w-5 h-5 text-red-400 mr-2 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+        </svg>
+        <div>
+          <p class="text-red-100 font-medium">Error loading settings</p>
+          <p id="settings-error-message" class="text-red-200 text-sm mt-1"></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings Content -->
+    <div id="settings-content" class="space-y-6">
+      <!-- Smart Passkey Button -->
+      <button id="passkey-btn" class="w-full glass-button px-4 py-3 bg-blue-600/80 hover:bg-blue-700/90 text-white font-medium rounded-md border border-blue-500/30 transition-all duration-200 text-sm flex items-center justify-center">
+        <svg id="passkey-icon" class="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+        </svg>
+        <span id="passkey-text">Add Passkey</span>
+      </button>
+
+      <!-- Registered Passkeys List -->
+      <div id="passkeys-list" class="hidden space-y-3">
+        <SectionDivider text="Registered Passkeys" />
+        <div id="passkeys-container" class="space-y-3">
+          <!-- Passkeys will be dynamically inserted here -->
+        </div>
+      </div>
+
+      <!-- Connected Accounts Divider -->
+      <SectionDivider text="Connected Accounts" />
+      <!-- SSO Connections Section -->
+      <div class="space-y-4">
+        <!-- DRY SSO Connection Components -->
+        <OAuthConnectionCard
+          provider="google"
+          displayName="Google"
+          statusId="google-status"
+          toggleId="google-toggle"
+        />
+        <OAuthConnectionCard
+          provider="github"
+          displayName="GitHub"
+          statusId="github-status"
+          toggleId="github-toggle"
+        />
+        <OAuthConnectionCard
+          provider="microsoft"
+          displayName="Microsoft"
+          statusId="microsoft-status"
+          toggleId="microsoft-toggle"
+        />
+        <OAuthConnectionCard
+          provider="facebook"
+          displayName="Meta"
+          statusId="facebook-status"
+          toggleId="facebook-toggle"
+        />
+        <OAuthConnectionCard
+          provider="apple"
+          displayName="Apple"
+          statusId="apple-status"
+          toggleId="apple-toggle"
+        />
+      </div>
+
+      <!-- Danger Zone Divider -->
+      <SectionDivider text="Danger Zone" />
+
+      <!-- Danger Zone -->
+      <div class="space-y-3">
+        <!-- Revoke All Passkeys -->
+        <div id="revoke-passkeys-section" class="hidden">
+          <p class="text-white/70 text-sm mb-2 text-center">
+            Revoke all registered passkeys. You can re-register them later if needed.
+          </p>
+          <button id="revoke-passkeys-btn" class="w-full px-4 py-2 bg-orange-600 text-white text-sm font-medium rounded-md hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-all duration-200">
+            Revoke All Passkeys
+          </button>
+        </div>
+
+        <!-- Delete Account -->
+        <div>
+          <p class="text-white/70 text-sm mb-2 text-center">
+            Permanently delete your account and all associated data. This action cannot be undone.
+          </p>
+          <button id="delete-account-btn" class="w-full px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all duration-200">
+            Delete Account
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</BaseModal>
+
+<!-- Delete Account Confirmation Modal using BaseModal -->
+<BaseModal 
+  id="delete-confirm-modal" 
+  closeButtonId="delete-confirm-close"
+  maxWidth="max-w-md"
+  backdropBlur={true}
+>
+  <div class="liquid-glass rounded-glass p-6 border border-white/20">
+    <!-- Header -->
+    <div class="mb-6 text-center">
+      <svg class="w-12 h-12 text-red-400 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+      </svg>
+      <h3 class="text-lg font-medium text-white mb-2">Are you absolutely sure?</h3>
+      <p class="text-white/70 mb-6">
+        This action will permanently delete your account, all your data, job history, and settings. This cannot be undone.
+      </p>
+    </div>
+
+    <div class="mb-6">
+      <label for="delete-confirmation" class="block text-sm font-medium text-white/90 mb-2">
+        Type "DELETE" to confirm:
+      </label>
+      <input 
+        type="text" 
+        id="delete-confirmation" 
+        class="w-full px-3 py-2 bg-black/30 border border-white/30 rounded-md text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+        placeholder="DELETE"
+        autocomplete="off"
+      >
+    </div>
+    <div class="flex justify-center space-x-4">
+      <button id="cancel-delete-btn" class="px-4 py-2 bg-white/10 hover:bg-white/20 text-white font-medium rounded-md border border-white/30 hover:border-white/50 transition-all duration-200">Cancel</button>
+      <button id="confirm-delete-btn" class="px-4 py-2 bg-red-600 text-white font-medium rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+        Delete Account
+      </button>
+    </div>
+  </div>
+</BaseModal>
+
+<!-- 
+  Astro Best Practice: Use script tags for interactivity
+  Following the same patterns as AuthModal - simple and DRY
+-->
+<script>
+  import { createContextLogger } from '../../utils/logger';
+  import { getApiBaseUrl } from '../../constants/api';
+
+  // Create logger instance for this component  
+  const logger = createContextLogger('UserSettingsModal');
+
+  // User settings data - properly typed following TypeScript best practices
+  interface UserInfo {
+    id: string;
+    username: string;
+    email: string;
+    full_name?: string;
+    created_at: string;
+    last_login?: string;
+  }
+
+  // CSRF token interface for proper typing (SOLID: Interface Segregation)
+  interface WindowWithCSRF extends Window {
+    csrfToken?: string;
+  }
+
+  interface SSOConnection {
+    provider: string;
+    connected: boolean;
+    email?: string | undefined;
+    displayName: string;
+    canDisconnect: boolean;
+  }
+
+  interface SSOConnectionStatus {
+    [provider: string]: SSOConnection;
+  }
+
+  // Backend OAuth connection data type
+  interface OAuthConnectionData {
+    provider?: string;
+    provider_name?: string;
+    connected: boolean;
+    email?: string;
+    user_email?: string;
+  }
+
+  // WebAuthn passkey device interface
+  interface PasskeyDevice {
+    id: string;
+    name: string;
+    last_used_at?: string;
+    created_at?: string;
+  }
+
+  // Passkey summary interface
+  interface PasskeySummary {
+    total_passkeys: number;
+    devices: PasskeyDevice[];
+  }
+
+  // WebAuthn credential interface for excludeCredentials/allowCredentials
+  interface WebAuthnCredentialDescriptor {
+    type: string;
+    id: string;
+    transports?: string[];
+  }
+
+  let userInfo: UserInfo | null = null;
+  let ssoConnections: SSOConnectionStatus = {};
+
+  // Clean Astro Islands script - Initialize UserSettingsModal functionality
+  logger.info('UserSettingsModal script loaded');
+
+  // Initialize modal functionality
+  document.addEventListener('DOMContentLoaded', () => {
+    // Listen for open event from user settings button
+    window.addEventListener('open-user-settings', () => {
+      openUserSettingsModal();
+    });
+
+    // Listen for close button clicks
+    const closeButton = document.getElementById('user-settings-close');
+    if (closeButton) {
+      closeButton.addEventListener('click', closeUserSettingsModal);
+    }
+
+    // Listen for backdrop clicks to close modal
+    const modal = document.getElementById('user-settings-modal');
+    if (modal) {
+      modal.addEventListener('click', (e) => {
+        // Check if click was on the backdrop (modal itself) or the backdrop div
+        if (e.target === modal || (e.target as HTMLElement)?.classList?.contains('base-modal-backdrop')) {
+          closeUserSettingsModal();
+        }
+      });
+    }
+
+    // Listen for escape key to close modal
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const modal = document.getElementById('user-settings-modal');
+        if (modal && !modal.classList.contains('opacity-0')) {
+          closeUserSettingsModal();
+        }
+      }
+    });
+
+    // Initialize component functionality
+    initDeleteConfirmation();
+    initPasskeyManagement();
+    initSSOManagement();
+
+    // Listen for authentication events to update SSO connection status
+    window.addEventListener('auth-success', async () => {
+      logger.info('Authentication success detected, refreshing SSO connections');
+      await loadSSOConnections();
+    });
+
+    window.addEventListener('user-logged-in', async () => {
+      logger.info('User logged in, refreshing SSO connections');
+      await loadSSOConnections();
+    });
+
+    logger.info('UserSettingsModal initialized');
+  });
+
+  // Security utility: Clear authentication data on logout/deletion
+  function clearAuthenticationData() {
+    // Note: With httpOnly cookies, the backend clears auth cookies on account deletion
+    // We only need to clear non-sensitive client-side data here
+    localStorage.removeItem('user_data');
+    sessionStorage.removeItem('user_data');
+
+    // Dispatch logout event for other components
+    window.dispatchEvent(new CustomEvent('auth-logout'));
+  }
+
+  // DRY utility: Show success message
+  function showSuccessMessage(message: string) {
+    const existingToast = document.getElementById('success-toast');
+    if (existingToast) {
+      existingToast.remove();
+    }
+
+    const toast = document.createElement('div');
+    toast.id = 'success-toast';
+    toast.className = 'fixed top-4 right-4 bg-green-600/90 text-white px-6 py-3 rounded-md shadow-lg z-50 backdrop-blur-sm border border-green-500/30';
+    toast.textContent = message;
+
+    document.body.appendChild(toast);
+
+    // Auto-remove after 3 seconds
+    setTimeout(() => {
+      toast.remove();
+    }, 3000);
+  }
+
+  // DRY utility: Show error message
+  function showErrorMessage(message: string) {
+    const existingToast = document.getElementById('error-toast');
+    if (existingToast) {
+      existingToast.remove();
+    }
+
+    const toast = document.createElement('div');
+    toast.id = 'error-toast';
+    toast.className = 'fixed top-4 right-4 bg-red-600/90 text-white px-6 py-3 rounded-md shadow-lg z-50 backdrop-blur-sm border border-red-500/30';
+    toast.textContent = message;
+
+    document.body.appendChild(toast);
+
+    // Auto-remove after 5 seconds for errors
+    setTimeout(() => {
+      toast.remove();
+    }, 5000);
+  }
+
+  // Open user settings modal and load data
+  async function openUserSettingsModal() {
+    logger.info('Opening user settings modal');
+    
+    // Show modal using the same pattern as other modals
+    const modal = document.getElementById('user-settings-modal');
+    if (modal) {
+      modal.style.display = 'flex';
+      // Use requestAnimationFrame to ensure display change takes effect first
+      requestAnimationFrame(() => {
+        modal.classList.remove('opacity-0', 'pointer-events-none');
+        modal.classList.add('opacity-100', 'pointer-events-auto');
+      });
+    }
+    
+    await loadUserData();
+  }
+
+  // Close user settings modal
+  function closeUserSettingsModal() {
+    logger.info('Closing user settings modal');
+    
+    const modal = document.getElementById('user-settings-modal');
+    if (modal) {
+      modal.classList.remove('opacity-100', 'pointer-events-auto');
+      modal.classList.add('opacity-0', 'pointer-events-none');
+      
+      // Hide after animation completes
+      setTimeout(() => {
+        modal.style.display = 'none';
+      }, 300);
+    }
+  }
+
+  // Load all user data
+  async function loadUserData() {
+    const loadingEl = document.getElementById('settings-loading');
+    const errorEl = document.getElementById('settings-error');
+    const contentEl = document.getElementById('settings-content');
+
+    try {
+      loadingEl?.classList.remove('hidden');
+      errorEl?.classList.add('hidden');
+      contentEl?.classList.add('hidden');
+
+      // Load user information
+      await loadUserInfo();
+      await updatePasskeyButton();
+      await loadSSOConnections();
+
+      loadingEl?.classList.add('hidden');
+      contentEl?.classList.remove('hidden');
+    } catch (error) {
+      logger.error('Failed to load user settings:', error);
+      loadingEl?.classList.add('hidden');
+      errorEl?.classList.remove('hidden');
+      const errorMessage = document.getElementById('settings-error-message');
+      if (errorMessage) {
+        errorMessage.textContent = error instanceof Error ? error.message : 'Unknown error occurred';
+      }
+    }
+  }
+
+  // Load user information
+  async function loadUserInfo() {
+    // OPTION 1: Check client-side storage first to avoid 401 errors on static pages
+    const hasToken = localStorage.getItem('auth_token') ||
+                     sessionStorage.getItem('auth_token') ||
+                     document.cookie.includes('auth_token');
+
+    if (!hasToken) {
+      logger.info('User not authenticated - settings unavailable until sign in');
+      userInfo = null;
+      return;
+    }
+
+    const apiBaseUrl = getApiBaseUrl();
+    const response = await fetch(`${apiBaseUrl}/auth/me`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: { 'Accept': 'application/json' },
+    });
+
+    // Handle unauthorized users gracefully - not an error, just not signed in
+    if (response.status === 401 || response.status === 403) {
+      logger.info('User not authenticated - settings unavailable until sign in');
+      userInfo = null;
+      // Clean up invalid tokens
+      localStorage.removeItem('auth_token');
+      sessionStorage.removeItem('auth_token');
+      return; // Don't throw error for expected unauthenticated state
+    }
+
+    if (!response.ok) {
+      throw new Error('Failed to load user information');
+    }
+    userInfo = await response.json();
+    
+    // Null check for userInfo before accessing properties
+    if (!userInfo) {
+      throw new Error('User information not available');
+    }
+    
+    // Update UI
+    const emailEl = document.getElementById('user-email');
+    const createdEl = document.getElementById('user-created');
+    const lastSigninEl = document.getElementById('user-last-signin');
+    
+    if (emailEl) emailEl.textContent = userInfo.email || 'Not available';
+    if (createdEl) createdEl.textContent = userInfo.created_at 
+      ? new Date(userInfo.created_at).toLocaleDateString() 
+      : 'Not available';
+    if (lastSigninEl) lastSigninEl.textContent = userInfo.last_login 
+      ? new Date(userInfo.last_login).toLocaleDateString() 
+      : 'Not available';
+  }
+
+
+  // Smart passkey button management
+  let hasPasskeys = false;
+
+  // Update passkey button based on current passkey status
+  async function updatePasskeyButton() {
+    try {
+      const apiBaseUrl = getApiBaseUrl();
+      const response = await fetch(`${apiBaseUrl}/auth/passkeys/summary`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' },
+      });
+
+      if (response.ok) {
+        const summary = await response.json();
+        hasPasskeys = summary.total_passkeys > 0;
+
+        // Load and display passkey list
+        await loadPasskeys(summary);
+      } else {
+        hasPasskeys = false;
+      }
+    } catch (error) {
+      logger.error('Failed to check passkey status:', error);
+      hasPasskeys = false;
+    }
+
+    // Update button UI based on passkey status
+    const button = document.getElementById('passkey-btn') as HTMLButtonElement | null;
+    const iconElement = document.getElementById('passkey-icon');
+    const text = document.getElementById('passkey-text') as HTMLSpanElement | null;
+
+    if (!button || !iconElement || !text) return;
+
+    // Safely cast to SVGElement after null check
+    const icon = iconElement as unknown as SVGElement;
+
+    if (hasPasskeys) {
+      // User has passkeys - change button to "Add Another Passkey"
+      text.textContent = 'Add Another Passkey';
+      button.className = 'w-full glass-button px-4 py-3 bg-blue-600/80 hover:bg-blue-700/90 text-white font-medium rounded-md border border-blue-500/30 transition-all duration-200 text-sm flex items-center justify-center';
+
+      // Keep plus icon
+      icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />';
+
+      button.onclick = addPasskey;
+    } else {
+      // User has no passkeys - show add option
+      text.textContent = 'Add Passkey';
+      button.className = 'w-full glass-button px-4 py-3 bg-blue-600/80 hover:bg-blue-700/90 text-white font-medium rounded-md border border-blue-500/30 transition-all duration-200 text-sm flex items-center justify-center';
+
+      // Change icon to plus icon
+      icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />';
+
+      button.onclick = addPasskey;
+    }
+  }
+
+  // Load and display passkeys
+  async function loadPasskeys(summary: PasskeySummary) {
+    const passkeysListDiv = document.getElementById('passkeys-list');
+    const passkeysContainer = document.getElementById('passkeys-container');
+    const revokePasskeysSection = document.getElementById('revoke-passkeys-section');
+
+    if (!passkeysListDiv || !passkeysContainer) return;
+
+    // Show/hide passkeys list based on whether user has passkeys
+    if (summary.devices && summary.devices.length > 0) {
+      passkeysListDiv.classList.remove('hidden');
+
+      // Show revoke all passkeys button when user has passkeys
+      if (revokePasskeysSection) {
+        revokePasskeysSection.classList.remove('hidden');
+      }
+
+      // Clear existing passkeys
+      passkeysContainer.innerHTML = '';
+
+      // Add each passkey
+      summary.devices.forEach((device: PasskeyDevice) => {
+        const passkeyCard = createPasskeyCard(device);
+        passkeysContainer.appendChild(passkeyCard);
+      });
+    } else {
+      passkeysListDiv.classList.add('hidden');
+
+      // Hide revoke all passkeys button when user has no passkeys
+      if (revokePasskeysSection) {
+        revokePasskeysSection.classList.add('hidden');
+      }
+    }
+  }
+
+  // Create a passkey card element (styled to match SSO cards)
+  function createPasskeyCard(device: PasskeyDevice): HTMLElement {
+    const card = document.createElement('div');
+    card.className = 'flex items-center justify-between p-4 bg-white/5 border border-white/10 rounded-lg';
+
+    // Format last used date
+    const lastUsed = device.last_used_at
+      ? new Date(device.last_used_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      : 'Never used';
+
+    card.innerHTML = `
+      <div class="flex items-center">
+        <svg class="w-6 h-6 text-blue-400 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+        </svg>
+        <div>
+          <p class="font-medium text-white">${device.name || 'Unknown Device'}</p>
+          <p class="text-sm text-white/70">Last used: ${lastUsed}</p>
+        </div>
+      </div>
+      <button
+        data-passkey-id="${device.id}"
+        class="passkey-disconnect-btn glass-button px-4 py-2 bg-white/10 hover:bg-white/20 text-white font-medium rounded-md border border-white/30 hover:border-white/50 transition-all duration-200 text-sm"
+      >
+        Disconnect
+      </button>
+    `;
+
+    // Attach disconnect handler
+    const disconnectBtn = card.querySelector('.passkey-disconnect-btn');
+    if (disconnectBtn) {
+      disconnectBtn.addEventListener('click', () => disconnectPasskey(device.id, device.name));
+    }
+
+    return card;
+  }
+
+  // Disconnect individual passkey
+  async function disconnectPasskey(credentialId: string, deviceName: string) {
+    if (!confirm(`Are you sure you want to disconnect "${deviceName}"? You will need to re-register this device if you want to use it again.`)) {
+      return;
+    }
+
+    try {
+      const apiBaseUrl = getApiBaseUrl();
+      // URL encode the credential ID to handle special characters
+      const encodedCredentialId = encodeURIComponent(credentialId);
+      const url = `${apiBaseUrl}/auth/passkeys/${encodedCredentialId}`;
+
+      logger.info('Disconnecting passkey', { credentialId, encodedCredentialId, deviceName, url });
+
+      const response = await fetch(url, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+        logger.error('Passkey disconnect failed', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData,
+          credentialId,
+          url
+        });
+        throw new Error(`Failed to disconnect passkey: ${JSON.stringify(errorData)}`);
+      }
+
+      const result = await response.json();
+      logger.info('Passkey disconnected successfully', { credentialId, deviceName, result });
+      showSuccessMessage(`${deviceName} disconnected successfully!`);
+
+      // Refresh passkey list
+      await updatePasskeyButton();
+    } catch (error) {
+      logger.error('Failed to disconnect passkey:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Failed to disconnect passkey. Please try again.';
+      showErrorMessage(errorMsg);
+    }
+  }
+
+  // Initialize passkey management
+  function initPasskeyManagement() {
+    // Button event handlers are set in updatePasskeyButton()
+  }
+
+  // Detect device name from user agent
+  function getDeviceName(): string {
+    const ua = navigator.userAgent;
+
+    // macOS devices
+    if (ua.includes('Mac OS X')) {
+      if (ua.includes('iPhone')) return 'iPhone';
+      if (ua.includes('iPad')) return 'iPad';
+      if (ua.includes('iPod')) return 'iPod';
+      return 'Mac';
+    }
+
+    // Windows devices
+    if (ua.includes('Windows')) return 'Windows PC';
+
+    // Android devices
+    if (ua.includes('Android')) {
+      if (ua.includes('Mobile')) return 'Android Phone';
+      return 'Android Tablet';
+    }
+
+    // Linux
+    if (ua.includes('Linux')) return 'Linux PC';
+
+    // iOS devices (fallback)
+    if (ua.includes('iPhone')) return 'iPhone';
+    if (ua.includes('iPad')) return 'iPad';
+
+    // Fallback
+    return 'Unknown Device';
+  }
+
+  // Add new passkey
+  // Helper function to convert base64url to ArrayBuffer
+  function base64urlToBuffer(base64url: string): ArrayBuffer {
+    const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64.padEnd(base64.length + (4 - base64.length % 4) % 4, '=');
+    const binary = atob(padded);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes.buffer;
+  }
+
+  // Helper function to convert ArrayBuffer to base64url
+  function bufferToBase64url(buffer: ArrayBuffer): string {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]!);
+    }
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  }
+
+  async function addPasskey() {
+    try {
+      logger.info('Starting passkey registration');
+
+      // Auto-detect device name (no prompt for better UX)
+      const deviceName = getDeviceName();
+
+      // Backend returns { public_key, challenge_key, device_name }
+      const apiBaseUrl = getApiBaseUrl();
+      const url = `${apiBaseUrl}/auth/passkeys/register/begin`;
+      logger.info('Calling passkey registration endpoint', { url, apiBaseUrl, deviceName });
+
+      const response = await fetch(url, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          device_name: deviceName
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        logger.error('Passkey registration failed', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText,
+          url
+        });
+        throw new Error(`Failed to start passkey registration: ${response.status} ${response.statusText}`);
+      }
+
+      const options = await response.json();
+      logger.info('Received options from backend', { options });
+
+      // Convert base64url strings to ArrayBuffers for WebAuthn API
+      let credential: PublicKeyCredential;
+      try {
+        const publicKeyOptions = {
+          ...options.public_key,
+          challenge: base64urlToBuffer(options.public_key.challenge),
+          user: {
+            ...options.public_key.user,
+            id: base64urlToBuffer(options.public_key.user.id),
+          },
+          excludeCredentials: options.public_key.excludeCredentials?.map((cred: WebAuthnCredentialDescriptor) => ({
+            ...cred,
+            id: base64urlToBuffer(cred.id),
+          })) || [],
+        };
+
+        logger.info('Converted publicKeyOptions', { publicKeyOptions });
+
+        // CRITICAL: Use converted options for WebAuthn API
+        credential = await navigator.credentials.create({
+          publicKey: publicKeyOptions
+        }) as PublicKeyCredential;
+      } catch (conversionError) {
+        logger.error('Error during WebAuthn conversion or creation', {
+          error: conversionError,
+          message: conversionError instanceof Error ? conversionError.message : String(conversionError),
+          stack: conversionError instanceof Error ? conversionError.stack : undefined,
+          options
+        });
+        throw conversionError;
+      }
+
+      if (!credential) {
+        throw new Error('Failed to create credential');
+      }
+
+      // Type the response properly for WebAuthn
+      const credentialResponse = credential.response as AuthenticatorAttestationResponse;
+
+      // Complete registration with challenge_key and device_name
+      const finishResponse = await fetch(`${apiBaseUrl}/auth/passkeys/register/complete`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          credential_response: {
+            id: credential.id,
+            rawId: bufferToBase64url(credential.rawId),
+            type: credential.type,
+            response: {
+              attestationObject: bufferToBase64url(credentialResponse.attestationObject),
+              clientDataJSON: bufferToBase64url(credentialResponse.clientDataJSON),
+            },
+          },
+          challenge_key: options.challenge_key,  // ✅ Required for backend verification
+          device_name: options.device_name,      // ✅ Device name from backend
+        }),
+      });
+
+      if (!finishResponse.ok) {
+        const errorData = await finishResponse.json().catch(() => ({ detail: 'Unknown error' }));
+        logger.error('Passkey registration completion failed:', {
+          status: finishResponse.status,
+          statusText: finishResponse.statusText,
+          error: errorData
+        });
+        throw new Error(`Failed to complete passkey registration: ${JSON.stringify(errorData)}`);
+      }
+
+      logger.info('Passkey added successfully');
+      showSuccessMessage('Passkey added successfully!');
+      await updatePasskeyButton(); // Refresh button state
+    } catch (error) {
+      logger.error('Failed to add passkey:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Failed to add passkey. Please try again.';
+      showErrorMessage(errorMsg);
+    }
+  }
+
+  // Revoke all passkeys - bulk passkey revocation for user security
+  async function revokeAllPasskeys() {
+    if (!confirm('Are you sure you want to revoke all your passkeys? This will disable passwordless authentication for your account. You can re-register passkeys later if needed.')) {
+      return;
+    }
+
+    // Disable button during operation to prevent double-clicks
+    const revokeButton = document.getElementById('revoke-passkeys-btn') as HTMLButtonElement;
+    const originalText = revokeButton?.textContent || 'Revoke All Passkeys';
+
+    try {
+      if (revokeButton) {
+        revokeButton.disabled = true;
+        revokeButton.textContent = 'Revoking...';
+      }
+
+      logger.info('Starting bulk passkey revocation');
+
+      // Get all passkeys for current user
+      const apiBaseUrl = getApiBaseUrl();
+      const response = await fetch(`${apiBaseUrl}/auth/passkeys/summary`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to retrieve passkey list');
+      }
+
+      const summary: PasskeySummary = await response.json();
+      const devices = summary.devices || [];
+
+      if (devices.length === 0) {
+        showErrorMessage('No passkeys found to revoke.');
+        return;
+      }
+
+      // Delete each passkey sequentially (ensures proper cleanup)
+      let successCount = 0;
+      let failedCount = 0;
+
+      for (const device of devices) {
+        try {
+          // URL encode credential ID to handle special characters
+          const encodedCredentialId = encodeURIComponent(device.id);
+          const deleteResponse = await fetch(`${apiBaseUrl}/auth/passkeys/${encodedCredentialId}`, {
+            method: 'DELETE',
+            credentials: 'include',
+            headers: { 'Accept': 'application/json' },
+          });
+
+          if (deleteResponse.ok) {
+            successCount++;
+            logger.info('Passkey revoked', { deviceId: device.id, deviceName: device.name });
+          } else {
+            failedCount++;
+            logger.error('Failed to revoke passkey', {
+              deviceId: device.id,
+              deviceName: device.name,
+              status: deleteResponse.status
+            });
+          }
+        } catch (error) {
+          failedCount++;
+          logger.error('Error revoking passkey', {
+            deviceId: device.id,
+            deviceName: device.name,
+            error
+          });
+        }
+      }
+
+      // Show appropriate success/error message
+      if (successCount === devices.length) {
+        logger.info('All passkeys revoked successfully', { count: successCount });
+        showSuccessMessage(`All ${successCount} passkey${successCount > 1 ? 's' : ''} revoked successfully!`);
+      } else if (successCount > 0) {
+        logger.warn('Partial passkey revocation', { successCount, failedCount });
+        showSuccessMessage(`${successCount} passkey${successCount > 1 ? 's' : ''} revoked. ${failedCount} failed - please try again.`);
+      } else {
+        throw new Error('Failed to revoke any passkeys');
+      }
+
+      // Refresh passkey list and button state
+      await updatePasskeyButton();
+    } catch (error) {
+      logger.error('Failed to revoke passkeys:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Failed to revoke passkeys. Please try again.';
+      showErrorMessage(errorMsg);
+    } finally {
+      // Re-enable button
+      if (revokeButton) {
+        revokeButton.disabled = false;
+        revokeButton.textContent = originalText;
+      }
+    }
+  }
+
+
+  // DRY SSO Provider Configuration
+  const SSO_PROVIDERS = [
+    { key: 'google', displayName: 'Google' },
+    { key: 'github', displayName: 'GitHub' },
+    { key: 'microsoft', displayName: 'Microsoft' },
+    { key: 'facebook', displayName: 'Meta' },
+    { key: 'apple', displayName: 'Apple' }
+  ];
+
+  // Load SSO connections with DRY implementation
+  async function loadSSOConnections() {
+    // First, get connected providers (mock for now until backend implements this)
+    const connectedProviders = await getConnectedSSOProviders();
+    const connectedCount = Object.values(connectedProviders).filter(conn => conn.connected).length;
+
+    for (const providerConfig of SSO_PROVIDERS) {
+      const provider = providerConfig.key;
+      const connection = connectedProviders[provider] || {
+        provider,
+        connected: false,
+        displayName: providerConfig.displayName,
+        canDisconnect: false
+      };
+
+      // Update canDisconnect logic: can only disconnect if more than one SSO is connected
+      connection.canDisconnect = connection.connected && connectedCount > 1;
+
+      ssoConnections[provider] = connection;
+      updateSSOProviderUI(provider, connection);
+    }
+  }
+
+  // DRY function to get connected SSO providers - truly scalable for any number of providers
+  async function getConnectedSSOProviders(): Promise<SSOConnectionStatus> {
+    const connections: SSOConnectionStatus = {};
+
+    // Get real user data from the authenticated session (httpOnly cookies)
+    let currentUser: UserInfo | null = null;
+    try {
+      const apiBaseUrl = getApiBaseUrl();
+      const userResponse = await fetch(`${apiBaseUrl}/auth/me`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' },
+      });
+
+      if (userResponse.ok) {
+        currentUser = await userResponse.json();
+      }
+    } catch (error) {
+      logger.error('Failed to get user data:', error);
+    }
+
+    // Check each provider for connection status
+    for (const providerConfig of SSO_PROVIDERS) {
+      const provider = providerConfig.key;
+      const connection = await checkSSOProviderConnection(provider, providerConfig.displayName, currentUser);
+      connections[provider] = connection;
+    }
+
+    return connections;
+  }
+
+  // DRY function to check individual SSO provider connection - works for ANY provider
+  async function checkSSOProviderConnection(
+    provider: string,
+    displayName: string,
+    currentUser: UserInfo | null
+  ): Promise<SSOConnection> {
+    try {
+      // Step 1: Try to get real OAuth connection data from backend database
+      const realConnectionData = await getRealSSOConnectionData(provider);
+
+      if (realConnectionData !== null) {
+        return {
+          provider,
+          connected: realConnectionData.connected,
+          email: realConnectionData.email,
+          displayName,
+          canDisconnect: false // Will be set in loadSSOConnections based on total connected count
+        };
+      }
+
+      // Step 2: Fallback to intelligent heuristics if real data not available
+      const heuristicData = await detectProviderConnection(provider, currentUser);
+
+      return {
+        provider,
+        connected: heuristicData.connected,
+        email: heuristicData.email,
+        displayName,
+        canDisconnect: false // Will be set in loadSSOConnections based on total connected count
+      };
+    } catch (error) {
+      logger.error(`Failed to check ${provider} connection:`, error);
+      return {
+        provider,
+        connected: false,
+        displayName,
+        canDisconnect: false
+      };
+    }
+  }
+
+  // Check for real SSO connection data from backend database - BEST PRACTICE APPROACH
+  async function getRealSSOConnectionData(provider: string): Promise<{connected: boolean, email?: string} | null> {
+    try {
+      // BEST PRACTICE: Query the backend database for OAuth connections
+      // This should check the sso_logins or oauth_connections table for the current user
+
+      // Option 1: Try dedicated OAuth connections endpoint
+      try {
+        const apiBaseUrl = getApiBaseUrl();
+        const response = await fetch(`${apiBaseUrl}/auth/oauth/connections`, {
+          method: 'GET',
+          credentials: 'include',
+          headers: { 'Accept': 'application/json' },
+        });
+
+        if (response.ok) {
+          const connections = await response.json();
+          logger.info('OAuth connections from database:', { connections, provider });
+
+          // CRITICAL FIX: Always return definitive result when backend endpoint works
+          // This prevents fallback to heuristic logic which was causing false positives
+
+          // Check if provider is in the connections list
+          const providerConnection = connections.find((conn: OAuthConnectionData) => conn.provider === provider || conn.provider_name === provider);
+          if (providerConnection && providerConnection.connected) {
+            logger.info(`Provider ${provider} found in database as connected`, { providerConnection });
+            return {
+              connected: true,
+              email: providerConnection.email || providerConnection.user_email
+            };
+          } else {
+            logger.info(`Provider ${provider} not found in database connections or marked as disconnected`, {
+              connectionsCount: connections.length,
+              providerFound: !!providerConnection,
+              providerConnected: providerConnection?.connected
+            });
+            // CRITICAL: Return definitive false result to prevent heuristic fallback
+            return { connected: false };
+          }
+        } else if (response.status === 401) {
+          logger.debug('User not authenticated, cannot check OAuth connections');
+          // Return null to allow fallback to client-side authentication check
+          return null;
+        }
+      } catch (error) {
+        logger.debug('OAuth connections endpoint not available, trying alternative approach', {
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+
+      // Option 2: Check if /auth/me contains OAuth provider information from database
+      const apiBaseUrl = getApiBaseUrl();
+      const response = await fetch(`${apiBaseUrl}/auth/me`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' },
+      });
+
+      if (response.ok) {
+        const userData = await response.json();
+        logger.info('User data from /auth/me:', { userData });
+
+        // Check for OAuth provider info in user data (populated from database)
+        if (userData.oauth_providers || userData.sso_providers || userData.connected_providers) {
+          const providers = userData.oauth_providers || userData.sso_providers || userData.connected_providers;
+          if (Array.isArray(providers)) {
+            const isConnected = providers.includes(provider);
+            return {
+              connected: isConnected,
+              email: isConnected ? userData.email : undefined
+            };
+          } else if (typeof providers === 'object') {
+            const providerData = providers[provider];
+            if (providerData) {
+              return {
+                connected: true,
+                email: providerData.email || userData.email
+              };
+            }
+          }
+        }
+
+        // Check auth_method field for OAuth provider information
+        if (userData.auth_method) {
+          if (userData.auth_method.includes(`oauth_${provider}`) || userData.auth_method.includes(provider)) {
+            return {
+              connected: true,
+              email: userData.email
+            };
+          }
+        }
+      }
+
+      // If no OAuth data found in database responses, return null for heuristic fallback
+      return null;
+
+    } catch (error) {
+      logger.warn('Error checking real SSO connection data from database:', error);
+      return null;
+    }
+
+    // Note: No additional database checking methods needed - we already check:
+    // 1. /auth/oauth/connections endpoint (definitive data from database)
+    // 2. /auth/me endpoint with oauth_providers/sso_providers/connected_providers fields
+    // 3. /auth/me endpoint with auth_method field
+    // If none of these provide OAuth data, the try-catch above returns null to fall back to heuristic detection
+  }
+
+  // Intelligent SSO connection detection - works for any provider without hardcoding
+  // Now with proper endpoint detection for future-proofing
+  async function detectProviderConnection(provider: string, currentUser: UserInfo | null): Promise<{connected: boolean, email?: string}> {
+    if (!currentUser) {
+      return { connected: false };
+    }
+
+    // Step 1: Try the dedicated OAuth provider status endpoint (future-proof)
+    try {
+      const apiBaseUrl = getApiBaseUrl();
+      const statusEndpoint = `${apiBaseUrl}/auth/oauth/${provider}/status`;
+      const statusResponse = await fetch(statusEndpoint, {
+        method: 'GET',
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' },
+      });
+
+      if (statusResponse.ok) {
+        const statusData = await statusResponse.json();
+        logger.info(`OAuth provider ${provider} status from dedicated endpoint:`, { statusData });
+
+        // If we get a successful response from the dedicated endpoint, use it
+        return {
+          connected: statusData.connected || false,
+          email: statusData.email || currentUser.email
+        };
+      } else if (statusResponse.status === 404) {
+        // Endpoint not implemented yet, fall through to heuristic detection
+        logger.debug(`OAuth provider ${provider} status endpoint not yet implemented (404), using heuristics`);
+      } else if (statusResponse.status === 401) {
+        // User not authenticated
+        return { connected: false };
+      }
+    } catch (error) {
+      // Network error or endpoint doesn't exist, fall through to heuristic detection
+      logger.debug(`OAuth provider ${provider} status endpoint unavailable, using heuristics`, {
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+
+    // Enhanced heuristics to detect probable connections
+
+    // Heuristic 1: Check if user email domain suggests SSO provider
+    const emailDomain = currentUser.email?.split('@')[1]?.toLowerCase();
+    const providerPatterns: Record<string, string[]> = {
+      google: ['gmail.com', 'googlemail.com'],
+      microsoft: ['outlook.com', 'hotmail.com', 'live.com', 'msn.com'],
+      github: [], // GitHub doesn't use email domain patterns
+      facebook: [], // Facebook doesn't use email domain patterns
+      apple: ['icloud.com', 'me.com', 'mac.com']
+    };
+
+    const patterns = providerPatterns[provider] || [];
+    const domainMatches = emailDomain && patterns.includes(emailDomain);
+
+    // Heuristic 2: If user is authenticated via OAuth, determine most likely provider
+    // Since we're in the user settings modal, the user is already authenticated
+    // We need to identify which OAuth provider they used
+
+    // If email domain matches a provider, that's the most likely connection
+    if (domainMatches) {
+      logger.info(`Email domain ${emailDomain} matches ${provider}, showing as connected`);
+      return {
+        connected: true,
+        email: currentUser.email
+      };
+    }
+
+    // Heuristic 3: Only show as connected if email domain clearly indicates the provider
+    if (domainMatches) {
+      logger.info(`Email domain ${emailDomain} matches ${provider}, showing as connected`);
+      return {
+        connected: true,
+        email: currentUser.email
+      };
+    }
+
+    // Default: assume not connected unless we have clear evidence
+    // This is more conservative and avoids false positives
+    return { connected: false };
+  }
+
+  // DRY function to update SSO provider UI
+  function updateSSOProviderUI(provider: string, connection: SSOConnection) {
+    const statusEl = document.getElementById(`${provider}-status`) as HTMLElement;
+    const toggleEl = document.getElementById(`${provider}-toggle`) as HTMLButtonElement;
+
+    if (!statusEl || !toggleEl) return;
+
+    if (connection.connected) {
+      // Connected state
+      statusEl.textContent = 'Connected';
+      statusEl.className = 'text-sm text-green-400';
+
+      toggleEl.textContent = 'Disconnect';
+      toggleEl.disabled = !connection.canDisconnect;
+
+      if (connection.canDisconnect) {
+        toggleEl.className = 'glass-button px-4 py-2 bg-red-600/80 hover:bg-red-700/90 text-white font-medium rounded-md border border-red-500/30 transition-all duration-200 text-sm';
+      } else {
+        toggleEl.className = 'glass-button px-4 py-2 bg-gray-600/50 text-white/50 font-medium rounded-md border border-gray-500/30 cursor-not-allowed text-sm';
+        toggleEl.title = 'Cannot disconnect your only connected account';
+      }
+
+      toggleEl.onclick = connection.canDisconnect ? () => toggleSSO(provider) : null;
+    } else {
+      // Disconnected state
+      statusEl.textContent = 'Not connected';
+      statusEl.className = 'text-sm text-white/70';
+
+      toggleEl.textContent = 'Connect';
+      toggleEl.disabled = false;
+      toggleEl.className = 'glass-button px-4 py-2 bg-blue-600/80 hover:bg-blue-700/90 text-white font-medium rounded-md border border-blue-500/30 transition-all duration-200 text-sm';
+      toggleEl.onclick = () => toggleSSO(provider);
+      toggleEl.title = '';
+    }
+  }
+
+  // Initialize SSO management
+  function initSSOManagement() {
+    // SSO toggle handlers are set up in loadSSOConnections
+  }
+
+  // Toggle SSO connection
+  async function toggleSSO(provider: string) {
+    const connection = ssoConnections[provider];
+
+    if (connection?.connected) {
+      // Disconnect
+      if (!confirm(`Are you sure you want to disconnect your ${connection.displayName} account?`)) {
+        return;
+      }
+
+      try {
+        logger.info(`Disconnecting OAuth provider: ${provider}`);
+
+        const apiBaseUrl = getApiBaseUrl();
+        const response = await fetch(`${apiBaseUrl}/auth/oauth/connections/${provider}`, {
+          method: 'DELETE',
+          credentials: 'include',
+          headers: {
+            'Accept': 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+
+          if (response.status === 400) {
+            // Safety check failed - would lock user out
+            throw new Error(errorData.detail || 'Cannot disconnect this account. Please set a password or connect another OAuth provider first.');
+          } else if (response.status === 404) {
+            throw new Error(`${connection.displayName} account is not connected.`);
+          } else {
+            throw new Error(errorData.detail || `Failed to disconnect ${connection.displayName} account.`);
+          }
+        }
+
+        const result = await response.json();
+        logger.info(`OAuth provider ${provider} disconnected successfully`, result);
+
+        showSuccessMessage(`${connection.displayName} account disconnected successfully.`);
+
+        // Reload SSO connections to update UI
+        await loadSSOConnections();
+      } catch (error) {
+        logger.error(`Failed to disconnect OAuth provider ${provider}:`, error);
+        const errorMessage = error instanceof Error ? error.message : `Failed to disconnect ${connection.displayName} account.`;
+        showErrorMessage(errorMessage);
+      }
+    } else {
+      // Connect - navigate to backend OAuth endpoint
+      const apiBaseUrl = getApiBaseUrl();
+      window.location.href = `${apiBaseUrl}/auth/oauth/${provider}`;
+    }
+  }
+
+  // Initialize delete confirmation and danger zone actions
+  function initDeleteConfirmation() {
+    const deleteBtn = document.getElementById('delete-account-btn') as HTMLButtonElement;
+    const confirmInput = document.getElementById('delete-confirmation') as HTMLInputElement;
+    const confirmBtn = document.getElementById('confirm-delete-btn') as HTMLButtonElement;
+    const cancelBtn = document.getElementById('cancel-delete-btn') as HTMLButtonElement;
+    const revokePasskeysBtn = document.getElementById('revoke-passkeys-btn') as HTMLButtonElement;
+
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', () => {
+        // Show delete confirmation modal
+        const deleteModal = document.getElementById('delete-confirm-modal');
+        if (deleteModal) {
+          deleteModal.style.display = 'flex';
+          deleteModal.classList.remove('opacity-0', 'pointer-events-none');
+          deleteModal.classList.add('opacity-100', 'pointer-events-auto');
+        }
+        if (confirmInput) confirmInput.value = '';
+        if (confirmBtn) confirmBtn.disabled = true;
+      });
+    }
+
+    if (confirmInput) {
+      confirmInput.addEventListener('input', () => {
+        if (confirmBtn) {
+          confirmBtn.disabled = confirmInput.value !== 'DELETE';
+        }
+      });
+    }
+
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', () => {
+        // Hide delete confirmation modal
+        const deleteModal = document.getElementById('delete-confirm-modal');
+        if (deleteModal) {
+          deleteModal.classList.add('opacity-0', 'pointer-events-none');
+          deleteModal.classList.remove('opacity-100', 'pointer-events-auto');
+          setTimeout(() => {
+            deleteModal.style.display = 'none';
+          }, 300);
+        }
+      });
+    }
+
+    if (confirmBtn) {
+      confirmBtn.addEventListener('click', deleteAccount);
+    }
+
+    // Hook up revoke all passkeys button
+    if (revokePasskeysBtn) {
+      revokePasskeysBtn.addEventListener('click', revokeAllPasskeys);
+    }
+  }
+
+  // Delete account - Enhanced with proper error handling and security
+  async function deleteAccount() {
+    const confirmBtn = document.getElementById('confirm-delete-btn') as HTMLButtonElement;
+    const deleteModal = document.getElementById('delete-confirm-modal');
+
+    try {
+      // Show loading state
+      if (confirmBtn) {
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Deleting...';
+      }
+
+      logger.info('Initiating account deletion');
+
+      // Enhanced fetch relying on httpOnly cookies for authentication
+      const apiBaseUrl = getApiBaseUrl();
+
+      const headers: Record<string, string> = {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      };
+
+      // Add CSRF protection if available
+      const csrfToken = (window as WindowWithCSRF).csrfToken;
+      if (csrfToken) {
+        headers['X-CSRF-Token'] = csrfToken;
+      }
+
+      const response = await fetch(`${apiBaseUrl}/auth/account`, {
+        method: 'DELETE',
+        credentials: 'include', // Critical: Include HTTP-only auth cookies
+        headers,
+        // Add request timeout for better UX
+        signal: AbortSignal.timeout(30000) // 30 second timeout
+      });
+
+      // Enhanced error handling with specific status codes
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+
+        switch (response.status) {
+          case 401:
+            throw new Error('Authentication expired. Please sign in again.');
+          case 403:
+            throw new Error('You do not have permission to delete this account.');
+          case 404:
+            throw new Error('Account not found or already deleted.');
+          case 429:
+            throw new Error('Too many requests. Please try again later.');
+          case 500:
+            throw new Error('Server error. Please try again later.');
+          default:
+            throw new Error(errorData.message || `Failed to delete account (${response.status})`);
+        }
+      }
+
+      // Account deleted successfully
+      logger.info('Account deleted successfully');
+
+      // Clear any stored auth data
+      clearAuthenticationData();
+
+      // Hide confirmation modal
+      if (deleteModal) {
+        deleteModal.style.display = 'none';
+      }
+
+      // Show success message briefly before redirect
+      showSuccessMessage('Account deleted successfully. Redirecting...');
+
+      // Redirect to home page after brief delay
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 2000);
+
+    } catch (error) {
+      logger.error('Failed to delete account:', error);
+
+      // Reset button state
+      if (confirmBtn) {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Delete Account';
+      }
+
+      // Show user-friendly error message
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete account. Please try again.';
+      showErrorMessage(errorMessage);
+    }
+  }
+</script>
+
+<style>
+  /* Modal styles and animations - following Astro best practices */
+  .glass {
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .rounded-glass {
+    border-radius: 12px;
+  }
+
+  .glass-button {
+    backdrop-filter: blur(8px);
+    transition: all 0.2s ease-out;
+  }
+
+  .glass-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  .glass-button:active {
+    transform: translateY(0);
+  }
+
+  .glass-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none !important;
+  }
+
+  /* Smooth loading animation */
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  .animate-spin {
+    animation: spin 1s linear infinite;
+  }
+</style>

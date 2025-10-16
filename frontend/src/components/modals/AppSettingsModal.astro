@@ -1,0 +1,576 @@
+---
+/**
+ * Settings Panel Component - Astro MCP Best Practices
+ * Uses BaseModal for consistent modal behavior and animations
+ * Follows Astro Islands architecture with proper client-side hydration
+ */
+
+// Import DRY/SOLID BaseModal component
+import BaseModal from '../common/BaseModal.astro';
+
+// Import DRY/SOLID Icon Components
+import IconSettings from '../icons/IconSettings.astro';
+import IconClipboard from '../icons/IconClipboard.astro';
+import IconDisplay from '../icons/IconDisplay.astro';
+import IconBell from '../icons/IconBell.astro';
+
+// Import Settings Bridge for React/JS integration
+import SettingsBridgeInitializer from '../settings/SettingsBridgeInitializer.tsx';
+
+// Use fixed IDs for DRY/SOLID modal management
+const panelId = "settings-panel";
+const settingsContentId = "settings-content";
+---
+
+<!-- Astro Islands approach with data attributes (Astro MCP best practice) -->
+<div
+  data-component="settings-panel"
+  data-panel-id={panelId}
+  data-content-id={settingsContentId}
+>
+  <!-- DRY/SOLID BaseModal with Settings-specific content -->
+  <BaseModal
+    id="settings-panel"
+    closeButtonId="settings-close"
+    maxWidth="max-w-6xl"
+  >
+    <div class="liquid-glass rounded-glass p-6 border border-white/20">
+      <!-- Header -->
+      <div class="mb-6">
+        <h2 class="text-2xl font-bold text-white">Settings</h2>
+        <p class="text-white/60 text-sm mt-1">
+          Customize your application preferences
+        </p>
+      </div>
+
+      <!-- Tab Navigation -->
+      <div class="flex space-x-1 mb-6" data-component="tab-navigation">
+        <button
+          class="flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors bg-blue-500/20 text-blue-300 border border-blue-500/30"
+          data-tab="api"
+          data-action="switch-tab"
+        >
+          <IconSettings />
+          <span class="font-medium">API Config</span>
+        </button>
+        <button
+          class="flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors text-white/60 hover:text-white hover:bg-white/5"
+          data-tab="jobs"
+          data-action="switch-tab"
+        >
+          <IconClipboard />
+          <span class="font-medium">Job Defaults</span>
+        </button>
+        <button
+          class="flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors text-white/60 hover:text-white hover:bg-white/5"
+          data-tab="app"
+          data-action="switch-tab"
+        >
+          <IconDisplay />
+          <span class="font-medium">Display</span>
+        </button>
+        <button
+          class="flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors text-white/60 hover:text-white hover:bg-white/5"
+          data-tab="notifications"
+          data-action="switch-tab"
+        >
+          <IconBell />
+          <span class="font-medium">Notifications</span>
+        </button>
+      </div>
+
+      <!-- Tab Content Container -->
+      <div id={settingsContentId} class="min-h-[400px]" data-component="tab-content">
+        <!-- API Config Tab (default active) -->
+        <div id="tab-api" class="tab-content" data-tab="api">
+          <div class="space-y-6">
+            <!-- API Configuration -->
+            <div class="space-y-4">
+              <h3 class="text-lg font-semibold text-white flex items-center gap-2">
+                <IconSettings class="text-blue-400" />
+                API Configuration
+              </h3>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="space-y-3">
+                  <div>
+                    <label for="api-url" class="block text-sm font-medium text-white/80 mb-1">Backend URL</label>
+                    <input
+                      type="url"
+                      id="api-url"
+                      class="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:border-blue-500/50 focus:outline-none"
+                      placeholder="http://localhost"
+                    />
+                  </div>
+
+                  <div>
+                    <label for="api-timeout" class="block text-sm font-medium text-white/80 mb-1">Request Timeout (seconds)</label>
+                    <input
+                      type="number"
+                      id="api-timeout"
+                      class="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:border-blue-500/50 focus:outline-none"
+                      min="5"
+                      max="300"
+                      value="30"
+                      placeholder="30"
+                    />
+                  </div>
+
+                  <div>
+                    <label for="refresh-interval" class="block text-sm font-medium text-white/80 mb-1">Auto-refresh Interval (seconds)</label>
+                    <input
+                      type="number"
+                      id="refresh-interval"
+                      class="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:border-blue-500/50 focus:outline-none"
+                      min="5"
+                      max="300"
+                      value="10"
+                      placeholder="10"
+                    />
+                  </div>
+                </div>
+
+                <div class="space-y-4">
+                  <div class="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                    <h4 class="text-sm font-medium text-blue-300 mb-2">Connection Status</h4>
+                    <div class="text-sm text-white/60">
+                      <div class="flex items-center gap-2 mb-1">
+                        <div class="w-2 h-2 bg-green-400 rounded-full"></div>
+                        <span>Backend: Connected</span>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <div class="w-2 h-2 bg-green-400 rounded-full"></div>
+                        <span>Database: Connected</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                    <h4 class="text-sm font-medium text-yellow-300 mb-2">API Info</h4>
+                    <div class="text-xs text-white/60 space-y-1">
+                      <div>Following CLAUDE.md standards</div>
+                      <div>Docker backend only</div>
+                      <div>No local services</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex items-center justify-between pt-6 border-t border-white/10">
+              <button
+                type="button"
+                class="glass-button px-4 py-2 text-orange-400 hover:text-orange-300 border border-orange-500/30 hover:border-orange-500/50 transition-all duration-200"
+                data-action="reset-settings"
+              >
+                Reset to Defaults
+              </button>
+
+              <div class="flex items-center space-x-3">
+                <button
+                  type="button"
+                  class="glass-button px-4 py-2 text-white/70 hover:text-white transition-colors"
+                  data-action="cancel-changes"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="glass-button px-6 py-2 bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 border border-blue-500/50 hover:border-blue-500/70 transition-all duration-200"
+                  data-action="save-settings"
+                >
+                  Save Settings
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Job Defaults Tab -->
+        <div id="tab-jobs" class="tab-content hidden" data-tab="jobs">
+          <div class="space-y-6">
+            <!-- Job Defaults -->
+            <div class="space-y-4">
+              <h3 class="text-lg font-semibold text-white flex items-center gap-2">
+                <IconClipboard class="text-green-400" />
+                Job Processing Defaults
+              </h3>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="space-y-4">
+                  <h4 class="text-md font-medium text-white/90">Priority & Execution</h4>
+                  <div class="space-y-3">
+                    <div>
+                      <label for="default-priority" class="block text-sm font-medium text-white/80 mb-1">Default Priority</label>
+                      <select id="default-priority" class="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:border-blue-500/50 focus:outline-none">
+                        <option value="Low">Low</option>
+                        <option value="Normal">Normal</option>
+                        <option value="High">High</option>
+                        <option value="Urgent">Urgent</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label for="max-retries" class="block text-sm font-medium text-white/80 mb-1">Max Retries</label>
+                      <input
+                        type="number"
+                        id="max-retries"
+                        class="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:border-blue-500/50 focus:outline-none"
+                        min="0"
+                        max="10"
+                        value="3"
+                        placeholder="3"
+                      />
+                    </div>
+
+                    <div>
+                      <label for="job-timeout" class="block text-sm font-medium text-white/80 mb-1">Job Timeout (seconds)</label>
+                      <input
+                        type="number"
+                        id="job-timeout"
+                        class="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:border-blue-500/50 focus:outline-none"
+                        min="10"
+                        max="300"
+                        value="30"
+                        placeholder="30"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div class="space-y-4">
+                  <h4 class="text-md font-medium text-white/90">Job Queue Settings</h4>
+                  <div class="space-y-3">
+                    <div>
+                      <label for="max-concurrent-jobs" class="block text-sm font-medium text-white/80 mb-1">Max Concurrent Jobs</label>
+                      <input
+                        type="number"
+                        id="max-concurrent-jobs"
+                        class="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:border-blue-500/50 focus:outline-none"
+                        min="1"
+                        max="20"
+                        value="5"
+                      />
+                    </div>
+
+                    <div>
+                      <label for="queue-batch-size" class="block text-sm font-medium text-white/80 mb-1">Queue Batch Size</label>
+                      <input
+                        type="number"
+                        id="queue-batch-size"
+                        class="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:border-blue-500/50 focus:outline-none"
+                        min="1"
+                        max="100"
+                        value="10"
+                      />
+                    </div>
+
+                    <div class="flex items-center space-x-3">
+                      <input
+                        type="checkbox"
+                        id="auto-retry-failed"
+                        class="text-blue-400"
+                      />
+                      <label for="auto-retry-failed" class="text-sm text-white/80">Auto-retry failed jobs</label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="p-4 bg-green-500/10 border border-green-500/20 rounded-lg">
+                <h4 class="text-sm font-medium text-green-300 mb-2">Job Processing Info</h4>
+                <div class="text-xs text-white/60 space-y-1">
+                  <div>• Jobs are processed by Docker backend</div>
+                  <div>• Higher priority jobs execute first</div>
+                  <div>• Failed jobs can be retried automatically</div>
+                  <div>• Concurrent job limits prevent overload</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex items-center justify-between pt-6 border-t border-white/10">
+              <button
+                type="button"
+                class="glass-button px-4 py-2 text-orange-400 hover:text-orange-300 border border-orange-500/30 hover:border-orange-500/50 transition-all duration-200"
+                data-action="reset-settings"
+              >
+                Reset to Defaults
+              </button>
+
+              <div class="flex items-center space-x-3">
+                <button
+                  type="button"
+                  class="glass-button px-4 py-2 text-white/70 hover:text-white transition-colors"
+                  data-action="cancel-changes"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="glass-button px-6 py-2 bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 border border-blue-500/50 hover:border-blue-500/70 transition-all duration-200"
+                  data-action="save-settings"
+                >
+                  Save Settings
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- App Settings Tab (renamed to Display) -->
+        <div id="tab-app" class="tab-content hidden" data-tab="app">
+          <div class="space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+              <!-- Display Options -->
+              <div class="space-y-4">
+                <h3 class="text-lg font-semibold text-white flex items-center gap-2">
+                  <IconDisplay class="text-purple-400" />
+                  Display Options
+                </h3>
+
+                <div class="space-y-3">
+                  <div class="flex items-center space-x-3">
+                    <input
+                      type="checkbox"
+                      id="dark-mode"
+                      class="text-blue-400"
+                    />
+                    <label for="dark-mode" class="text-sm text-white/80">Dark Mode</label>
+                  </div>
+
+                  <div class="flex items-center space-x-3">
+                    <input
+                      type="checkbox"
+                      id="show-job-ids"
+                      class="text-blue-400"
+                    />
+                    <label for="show-job-ids" class="text-sm text-white/80">Show Job IDs</label>
+                  </div>
+
+                  <div class="flex items-center space-x-3">
+                    <input
+                      type="checkbox"
+                      id="compact-mode"
+                      class="text-blue-400"
+                    />
+                    <label for="compact-mode" class="text-sm text-white/80">Compact Mode</label>
+                  </div>
+
+                  <div>
+                    <label for="jobs-per-page" class="block text-sm font-medium text-white/80 mb-1">Jobs Per Page</label>
+                    <select id="jobs-per-page" class="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:border-blue-500/50 focus:outline-none">
+                      <option value="5">5</option>
+                      <option value="10">10</option>
+                      <option value="25">25</option>
+                      <option value="50">50</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label for="timezone" class="block text-sm font-medium text-white/80 mb-1">Timezone</label>
+                    <select id="timezone" class="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:border-blue-500/50 focus:outline-none">
+                      <option value="auto">Auto-detect</option>
+                      <option value="America/New_York">Eastern Time</option>
+                      <option value="America/Chicago">Central Time</option>
+                      <option value="America/Denver">Mountain Time</option>
+                      <option value="America/Los_Angeles">Pacific Time</option>
+                      <option value="America/Anchorage">Alaska Time</option>
+                      <option value="Pacific/Honolulu">Hawaii Time</option>
+                      <option value="Europe/London">London (GMT)</option>
+                      <option value="Europe/Berlin">Central European Time</option>
+                      <option value="Europe/Berlin">Berlin</option>
+                      <option value="Europe/Rome">Rome</option>
+                      <option value="Europe/Madrid">Madrid</option>
+                      <option value="Europe/Amsterdam">Amsterdam</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex items-center justify-between pt-6 border-t border-white/10">
+              <button
+                type="button"
+                class="glass-button px-4 py-2 text-orange-400 hover:text-orange-300 border border-orange-500/30 hover:border-orange-500/50 transition-all duration-200"
+                data-action="reset-settings"
+              >
+                Reset to Defaults
+              </button>
+
+              <div class="flex items-center space-x-3">
+                <button
+                  type="button"
+                  class="glass-button px-4 py-2 text-white/70 hover:text-white transition-colors"
+                  data-action="cancel-changes"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="glass-button px-6 py-2 bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 border border-blue-500/50 hover:border-blue-500/70 transition-all duration-200"
+                  data-action="save-settings"
+                >
+                  Save Settings
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+
+        <!-- Notifications Tab -->
+        <div id="tab-notifications" class="tab-content hidden" data-tab="notifications">
+          <div class="space-y-6">
+            <!-- Notifications -->
+            <div class="space-y-4">
+              <h3 class="text-lg font-semibold text-white flex items-center gap-2">
+                <IconBell class="text-yellow-400" />
+                Notification Preferences
+              </h3>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="space-y-4">
+                  <h4 class="text-md font-medium text-white/90">Job Notifications</h4>
+                  <div class="space-y-3">
+                    <div class="flex items-center space-x-3">
+                      <input
+                        type="checkbox"
+                        id="completion-alerts"
+                        class="text-blue-400"
+                      />
+                      <label for="completion-alerts" class="text-sm text-white/80">Job Completion Alerts</label>
+                    </div>
+
+                    <div class="flex items-center space-x-3">
+                      <input
+                        type="checkbox"
+                        id="error-notifications"
+                        class="text-blue-400"
+                      />
+                      <label for="error-notifications" class="text-sm text-white/80">Error Notifications</label>
+                    </div>
+
+                    <div class="flex items-center space-x-3">
+                      <input
+                        type="checkbox"
+                        id="browser-notifications"
+                        class="text-blue-400"
+                      />
+                      <label for="browser-notifications" class="text-sm text-white/80">Browser Push Notifications</label>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="space-y-4">
+                  <h4 class="text-md font-medium text-white/90">Notification Settings</h4>
+                  <div class="space-y-3">
+                    <div>
+                      <label for="notification-sound" class="block text-sm font-medium text-white/80 mb-1">Notification Sound</label>
+                      <select id="notification-sound" class="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:border-blue-500/50 focus:outline-none">
+                        <option value="default">Default</option>
+                        <option value="chime">Chime</option>
+                        <option value="ping">Ping</option>
+                        <option value="none">Silent</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label for="notification-duration" class="block text-sm font-medium text-white/80 mb-1">Display Duration (seconds)</label>
+                      <input
+                        type="number"
+                        id="notification-duration"
+                        class="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:border-blue-500/50 focus:outline-none"
+                        min="3"
+                        max="15"
+                        value="5"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                <h4 class="text-sm font-medium text-yellow-300 mb-2">Browser Permissions</h4>
+                <p class="text-xs text-white/60 mb-3">
+                  To enable browser push notifications, you'll need to grant permission when prompted.
+                </p>
+                <button
+                  type="button"
+                  class="glass-button px-3 py-1 text-xs bg-yellow-500/20 text-yellow-300 hover:bg-yellow-500/30 border border-yellow-500/50"
+                  onclick="Notification.requestPermission()"
+                >
+                  Request Permission
+                </button>
+              </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex items-center justify-between pt-6 border-t border-white/10">
+              <button
+                type="button"
+                class="glass-button px-4 py-2 text-orange-400 hover:text-orange-300 border border-orange-500/30 hover:border-orange-500/50 transition-all duration-200"
+                data-action="reset-settings"
+              >
+                Reset to Defaults
+              </button>
+
+              <div class="flex items-center space-x-3">
+                <button
+                  type="button"
+                  class="glass-button px-4 py-2 text-white/70 hover:text-white transition-colors"
+                  data-action="cancel-changes"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="glass-button px-6 py-2 bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 border border-blue-500/50 hover:border-blue-500/70 transition-all duration-200"
+                  data-action="save-settings"
+                >
+                  Save Settings
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </BaseModal>
+</div>
+
+<!-- Settings Bridge - Connect React hooks to vanilla JS -->
+<SettingsBridgeInitializer client:load />
+
+<!-- DRY/SOLID Settings Modal using SettingsModalManager -->
+<script>
+  import { SettingsModalManager } from '../../scripts/settingsModalManager';
+  import { createContextLogger } from '../../utils/logger';
+
+  // Create logger for this component
+  const logger = createContextLogger('SettingsPanel');
+
+  // Initialize SOLID Settings Modal Manager
+  const settingsModalManager = new SettingsModalManager({
+    modalId: 'settings-panel',
+    closeOnEscape: true,
+    closeOnBackdrop: true,
+    onSettingsChanged: (settings) => {
+      logger.info('Settings changed via SOLID manager', settings);
+      // Emit global event for other components
+      window.dispatchEvent(new CustomEvent('settings-updated', { detail: settings }));
+    }
+  });
+
+  // Initialize the modal
+  settingsModalManager.init();
+
+  // Expose for debugging
+  if (typeof window !== 'undefined') {
+    (window as unknown as Record<string, unknown>).settingsModalManager = settingsModalManager;
+  }
+</script>

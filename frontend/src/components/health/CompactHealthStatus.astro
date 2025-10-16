@@ -1,0 +1,215 @@
+---
+// =============================================================================
+// COMPACT HEALTH STATUS - OPTIMIZED SERVER ISLAND FOR FOOTER (DRY/SOLID)
+// =============================================================================
+// ASTRO PERFORMANCE OPTIMIZATIONS APPLIED:
+// 1. ✅ Streaming: Individual service components render independently
+// 2. ✅ Zero Props: Maximum caching performance (GET requests only)
+// 3. ✅ Parallel Loading: Services load simultaneously
+// Following Astro MCP recommendations for optimal performance
+// =============================================================================
+
+// Removed unused imports - types are used inline
+
+// CACHE-BUSTING: Add timestamp to prevent excessive caching of health data
+// Health checks should be relatively fresh, not heavily cached
+// Note: Cache breaker functionality implemented at request level, not component level
+
+
+const serviceConfigs = {
+  frontend: { icon: '🌐', name: 'Frontend', priority: 1 },
+  cache: { icon: '⚡', name: 'Cache', priority: 2 },
+  database: { icon: '🐘', name: 'Database', priority: 3 },
+  backend: { icon: '🔧', name: 'Backend', priority: 4 }
+};
+
+// ASTRO SPA OPTIMIZATION: Only initialize health data on true initial site load
+// With transition:persist, this component persists across page navigations
+// So we only need to set initial states once, not on every page
+const healthResults = Object.entries(serviceConfigs).map(([key, config]) => ({
+  service: key,
+  result: {
+    status: key === 'frontend' ? 'up' : 'loading',
+    message: 'Waiting for initial health check...',
+    metrics: { responseTime: undefined as number | undefined }
+  },
+  config
+}));
+
+console.log('🎯 CompactHealthStatus: Initial load with loading states (persistent across navigation)');
+
+// Sort by priority for optimal display order (fastest services first)
+healthResults.sort((a, b) => a.config.priority - b.config.priority);
+
+console.log('🚀 OptimizedCompactHealthStatus: Individual service indicators only');
+console.log('🚀 Health results:', healthResults.map(hr => ({
+  service: hr.service,
+  status: hr.result.status,
+  responseTime: hr.result.metrics?.responseTime
+})));
+---
+
+<!-- OPTIMIZED COMPACT HEALTH STATUS (Individual Service Indicators Only) -->
+<div class="flex items-center space-x-4 footer-health-status"
+     data-component="health-status"
+     data-health-results={JSON.stringify(healthResults)}>
+
+
+  <!-- Individual Service Indicators (Streaming Optimized) -->
+  <div class="flex items-center space-x-2">
+    {healthResults.map(({ service, result, config }) => (
+      <div class="flex items-center space-x-1 group relative"
+           data-service={service}>
+
+        <div class={`w-2 h-2 rounded-full transition-all duration-300 ${
+          result.status === 'up' ? 'bg-green-400' :
+          result.status === 'degraded' ? 'bg-yellow-400' :
+          result.status === 'loading' ? 'bg-yellow-400 animate-pulse' :
+          result.status === 'down' ? 'bg-red-400' :
+          // Default states: frontend green (site is live), others pulsing yellow
+          service === 'frontend' ? 'bg-green-400' : 'bg-yellow-400 animate-pulse'
+        }`} data-status={result.status || (service === 'frontend' ? 'up' : 'loading')} data-service-name={service}></div>
+
+        <!-- Optimized Tooltip -->
+        <div class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1
+                    bg-black/90 text-white text-xs rounded opacity-0 group-hover:opacity-100
+                    transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
+          <span class="service-tooltip">
+            {config.icon} {config.name}: {result.status.toUpperCase()}
+            {result.metrics?.responseTime &&
+              <span> | {result.metrics.responseTime}ms</span>
+            }
+          </span>
+        </div>
+      </div>
+    ))}
+  </div>
+
+  <!-- Timestamp Indicator -->
+  <div class="text-white/50 text-xs">
+    <span>Last Updated: </span><span id="health-timestamp">Never</span>
+  </div>
+
+</div>
+
+<!-- ASTRO BEST PRACTICE: Using data attributes instead of define:vars -->
+<script>
+  // =============================================================================
+  // NANO STORE REACTIVE CLIENT - ASTRO MCP COMPLIANT
+  // Subscribes to Nano Store updates for real-time health status changes
+  // Following Astro best practices for reactive client-side components
+  // =============================================================================
+
+  import { formatTimestamp } from '/src/utils/timezone';
+  import { createContextLogger } from '/src/utils/logger';
+  import type { IConsolidatedHealthData } from '/src/stores/healthStore';
+
+  const logger = createContextLogger('CompactHealthStatus');
+  logger.info('Subscribing to Nano Store for real-time updates');
+
+  // Function to update timestamp display with user's timezone preference
+  function updateTimestamp(healthTimestamp: string | number | null): void {
+    const timestampElement = document.getElementById('health-timestamp');
+    if (timestampElement) {
+      // Use health data timestamp if provided, otherwise current time
+      const timestampToUse = healthTimestamp ? new Date(healthTimestamp) : new Date();
+      const newTimestamp = formatTimestamp(timestampToUse);
+      logger.info('Updating timestamp', { newTimestamp, healthTimestamp });
+      timestampElement.textContent = newTimestamp;
+    } else {
+      logger.warn('health-timestamp element not found');
+    }
+  }
+
+  // Update UI based on Nano Store data (Astro MCP best practice)
+  function updateHealthIndicators(healthData: IConsolidatedHealthData): void {
+    logger.info('Updating UI from Nano Store', { healthData });
+
+    const { services, metadata } = healthData;
+
+    // Update each service indicator
+    (['frontend', 'backend', 'database', 'cache'] as const).forEach(serviceName => {
+      const serviceData = services[serviceName];
+      const indicator = document.querySelector(`[data-service-name="${serviceName}"]`);
+
+      if (indicator && serviceData) {
+        // Remove all status classes
+        indicator.className = 'w-2 h-2 rounded-full transition-all duration-300';
+
+        // Add appropriate status class
+        if (serviceData.status === 'up') {
+          indicator.classList.add('bg-green-400');
+        } else if (serviceData.status === 'down' || serviceData.status === 'error') {
+          indicator.classList.add('bg-red-400');
+        } else if (serviceData.status === 'degraded') {
+          indicator.classList.add('bg-yellow-400');
+        } else {
+          indicator.classList.add('bg-yellow-400', 'animate-pulse');
+        }
+
+        indicator.setAttribute('data-status', serviceData.status);
+
+        // Update tooltip
+        const tooltip = indicator.parentElement?.querySelector('.service-tooltip');
+        if (tooltip) {
+          const icon = {
+            frontend: '🌐',
+            backend: '🔧',
+            database: '🐘',
+            cache: '⚡'
+          }[serviceName];
+
+          const name = serviceName.charAt(0).toUpperCase() + serviceName.slice(1);
+          let tooltipText = `${icon} ${name}: ${serviceData.status.toUpperCase()}`;
+
+          // Handle response time from metrics object
+          const responseTime = serviceData.metrics?.responseTime;
+          if (responseTime !== undefined && responseTime !== null) {
+            tooltipText += ` | ${responseTime}ms`;
+          }
+
+          tooltip.textContent = tooltipText;
+        }
+      }
+    });
+
+    // Update timestamp
+    if (metadata.timestamp > 0) {
+      updateTimestamp(metadata.timestamp);
+    }
+  }
+
+  // ASTRO MCP BEST PRACTICE: Self-contained client-side health system
+  // Following Single Responsibility Principle - this script ONLY handles client-side health initialization
+  // Using inline approach to avoid ES module import issues in client scripts
+
+  // REMOVED: Disabled SSE code block (moved to MainLayout following Astro MCP best practices)
+  // This eliminates dead code and improves TypeScript compliance
+
+  // NANO STORE SUBSCRIPTION: Subscribe to updates (using dynamic import for client-side)
+  import('/src/stores/healthStore').then(({ $healthData }) => {
+    logger.info('Setting up Nano Store subscription');
+
+    const unsubscribe = $healthData.subscribe(healthData => {
+      logger.info('Nano Store update received', { healthData });
+      updateHealthIndicators(healthData);
+    });
+
+    // Initial update with current store data
+    const initialData = $healthData.get();
+    if (initialData) {
+      updateHealthIndicators(initialData);
+    }
+
+    // Store cleanup function
+    window.__healthStatusCleanup = unsubscribe;
+  });
+
+
+  // Cleanup on page unload (though Astro usually handles this)
+  window.addEventListener('beforeunload', () => {
+    if (window.__healthStatusCleanup) {
+      window.__healthStatusCleanup();
+    }
+  });
+</script>

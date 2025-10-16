@@ -1,0 +1,111 @@
+# Build outputs
+dist/
+build/
+.netlify/
+
+# Generated files
+.astro/
+*.tsbuildinfo
+
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Package manager files (keep the one you use, ignore others)
+package-lock.json
+yarn.lock
+# pnpm-lock.yaml - Keep this committed for reproducible builds
+
+# Environment variables (following Astro best practices)
+.env
+.env.local
+.env.*.local
+# Note: .env.development and .env.production are committed for team consistency
+# Only .env and .env.*.local contain secrets and should be ignored
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+.nyc_output/
+
+# Temporary folders
+tmp/
+temp/
+
+# Cache directories
+.cache/
+.parcel-cache/
+.vite/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor directories and files
+.vscode/settings.json
+.vscode/launch.json
+.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+
+# Local development
+.local/
+.vercel/
+
+# Debug files and test output
+*.debug.png
+*.debug.jpg
+*.debug.jpeg
+*.debug.gif
+*.debug.webp
+debug_screenshots/
+test-output/
+test-results/
+playwright-report/
+coverage/
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+trace_output/
+
+# Performance profiling
+profile.stats
+*.prof
+*.cprof
+
+# Development artifacts
+*.tmp
+*.temp
+.cache/
+cache/
+
+# CI/CD artifacts
+.github/artifacts/
+ci-output/
+
+# Semantic Release generated files
+CHANGELOG.md

@@ -1,0 +1,394 @@
+// =============================================================================
+// JOB UTILITIES - DRY/SOLID Utility Functions
+// =============================================================================
+// Single Responsibility: Pure functions for job data manipulation
+// Following DRY principles and functional programming patterns
+// =============================================================================
+
+import type {
+  IJobData,
+  IBackendJob,
+  JobStatus,
+  JobFilter,
+  JobSort,
+  JobConverter,
+  JobPriority,
+} from "../../types/job.ts";
+
+// =============================================================================
+// JOB DATA CONVERSION UTILITIES
+// =============================================================================
+
+/**
+ * SOLID: Single responsibility - Extract title from URL using heuristics
+ */
+export const extractTitleFromUrl = (url: string): string => {
+  try {
+    const urlObj = new URL(url);
+    const path = urlObj.pathname;
+    const lastSegment = path.split("/").filter(Boolean).pop() || "Unknown";
+    return lastSegment
+      .split("-")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
+  } catch {
+    return "Unknown Page";
+  }
+};
+
+/**
+ * SOLID: Single responsibility - Format file size with proper units
+ */
+export const formatFileSize = (bytes: number): string => {
+  if (!bytes || bytes === 0) return "0 B";
+  const sizes = ["B", "KB", "MB", "GB", "TB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
+};
+
+/**
+ * SOLID: Single responsibility - Calculate job progress percentage
+ */
+export const calculateJobProgress = (job: IBackendJob): number => {
+  if (job.status === "completed") return 100;
+  if (job.status === "failed" || job.status === "cancelled") return 0;
+  if (job.status === "pending") return 0;
+
+  // For running jobs, estimate progress based on time elapsed
+  if (job.started_at) {
+    const startTime = new Date(job.started_at).getTime();
+    const now = Date.now();
+    const elapsed = now - startTime;
+
+    // Estimate 5 minutes for average job completion
+    const estimatedTotal = 5 * 60 * 1000; // 5 minutes in ms
+    const progress = Math.min(95, (elapsed / estimatedTotal) * 100);
+    return Math.round(progress);
+  }
+
+  return 10; // Default progress for processing jobs without start time
+};
+
+/**
+ * SOLID: Single responsibility - Calculate job duration
+ */
+export const calculateJobDuration = (job: IBackendJob): string => {
+  if (job.completed_at && job.started_at) {
+    const start = new Date(job.started_at).getTime();
+    const end = new Date(job.completed_at).getTime();
+    const durationMs = end - start;
+
+    const seconds = Math.floor(durationMs / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+
+    if (hours > 0) {
+      return `${hours}h ${minutes % 60}m`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${seconds % 60}s`;
+    } else {
+      return `${seconds}s`;
+    }
+  }
+
+  if (job.started_at && job.status === "running") {
+    const start = new Date(job.started_at).getTime();
+    const now = Date.now();
+    const durationMs = now - start;
+    const minutes = Math.floor(durationMs / (1000 * 60));
+    return `${minutes}m (running)`;
+  }
+
+  return "N/A";
+};
+
+/**
+ * SOLID: Single responsibility - Map backend status to UI status
+ */
+export const mapBackendStatus = (backendStatus: string): JobStatus => {
+  const statusMap: Record<string, JobStatus> = {
+    pending: "pending" as const,
+    running: "running" as const,
+    completed: "completed" as const,
+    failed: "failed" as const,
+    error: "failed" as const,
+    cancelled: "cancelled" as const,
+    validating: "validating" as const,
+    scraping: "scraping" as const,
+  };
+
+  return statusMap[backendStatus] || (backendStatus as JobStatus);
+};
+
+/**
+ * Backend job that may come from SSE events (has 'url' field) or REST API (has 'source_url' field)
+ */
+interface IBackendJobWithURL extends IBackendJob {
+  url?: string;
+}
+
+/**
+ * SOLID: Single responsibility - Convert backend job to frontend job data
+ */
+export const convertBackendJob: JobConverter = (
+  backendJob: IBackendJob,
+): IJobData => {
+  // CRITICAL: Backend SSE sends "url", REST API sends "source_url"
+  // Handle both field names for compatibility
+  const backendJobWithURL = backendJob as IBackendJobWithURL;
+  const sourceUrl = backendJob.source_url || backendJobWithURL.url || "";
+
+  // Extract domain from URL if not provided by backend
+  const domain =
+    backendJob.domain ||
+    (() => {
+      try {
+        return new URL(sourceUrl).hostname;
+      } catch {
+        return undefined;
+      }
+    })();
+
+  return {
+    // Basic job info
+    id: backendJob.id,
+    title: backendJob.title || extractTitleFromUrl(sourceUrl),
+    source_url: sourceUrl,
+    domain,
+
+    // Status and progress
+    status: mapBackendStatus(backendJob.status),
+    progress: backendJob.progress ?? calculateJobProgress(backendJob), // Use backend progress if available
+
+    // Timestamps
+    createdAt: new Date(backendJob.created_at),
+    startedAt: backendJob.started_at
+      ? new Date(backendJob.started_at)
+      : undefined,
+    completedAt: backendJob.completed_at
+      ? new Date(backendJob.completed_at)
+      : undefined,
+
+    // Duration and error info
+    duration: calculateJobDuration(backendJob),
+    error: backendJob.error_message ?? undefined,
+    error_type: backendJob.error_type,
+
+    // Retry and priority info
+    retryCount: backendJob.retry_count,
+    maxRetries: backendJob.max_retries,
+    priority: (backendJob.priority as JobPriority) || "normal",
+
+    // Content info
+    contentSize: backendJob.output_size_bytes ?? backendJob.content_size_bytes,
+    imagesDownloaded: backendJob.images_downloaded,
+    batchId: backendJob.batch_id ?? undefined,
+
+    // Content metadata from content_results table (backend enrichment)
+    wordCount: backendJob.word_count ?? 0,
+    imageCount: backendJob.image_count ?? (backendJob.images_downloaded || 0),
+    fileSize:
+      backendJob.output_size_bytes || backendJob.content_size_bytes
+        ? formatFileSize(
+            backendJob.output_size_bytes ?? backendJob.content_size_bytes ?? 0,
+          )
+        : undefined,
+  };
+};
+
+// =============================================================================
+// JOB FILTERING AND SORTING UTILITIES
+// =============================================================================
+
+/**
+ * SOLID: Single responsibility - Filter jobs by status and search query
+ */
+export const filterJobs = (
+  jobs: IJobData[],
+  filter: JobFilter,
+  searchQuery: string,
+): IJobData[] => {
+  return jobs.filter((job) => {
+    // Filter by status
+    if (filter !== "all" && job.status !== filter) {
+      return false;
+    }
+
+    // Filter by search query
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      return (
+        job.title.toLowerCase().includes(query) ||
+        job.source_url.toLowerCase().includes(query) ||
+        job.domain?.toLowerCase().includes(query) ||
+        job.id.toString().includes(query)
+      );
+    }
+
+    return true;
+  });
+};
+
+/**
+ * SOLID: Single responsibility - Sort jobs by specified criteria
+ */
+export const sortJobs = (jobs: IJobData[], sortBy: JobSort): IJobData[] => {
+  const sortedJobs = [...jobs]; // Don't mutate original array
+
+  sortedJobs.sort((a, b) => {
+    switch (sortBy) {
+      case "newest":
+        return (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0);
+
+      case "oldest":
+        return (a.createdAt?.getTime() ?? 0) - (b.createdAt?.getTime() ?? 0);
+
+      case "status":
+        return a.status.localeCompare(b.status);
+
+      case "progress":
+        return b.progress - a.progress;
+
+      default:
+        return 0;
+    }
+  });
+
+  return sortedJobs;
+};
+
+/**
+ * SOLID: Single responsibility - Get available job statuses from job list
+ */
+export const getAvailableStatuses = (jobs: IJobData[]): JobFilter[] => {
+  const statuses = new Set<JobStatus>();
+  jobs.forEach((job) => statuses.add(job.status));
+  return ["all", ...Array.from(statuses)];
+};
+
+// =============================================================================
+// JOB STATISTICS UTILITIES
+// =============================================================================
+
+/**
+ * SOLID: Single responsibility - Calculate job statistics for dashboard header
+ */
+export const calculateJobStats = (jobs: IJobData[]) => {
+  return {
+    total: jobs.length,
+    active: jobs.filter((job) =>
+      ["running", "validating", "scraping"].includes(job.status),
+    ).length,
+    completed: jobs.filter((job) => job.status === "completed").length,
+    failed: jobs.filter((job) => ["failed", "error"].includes(job.status))
+      .length,
+    queued: jobs.filter((job) => job.status === "pending").length,
+    processing: jobs.filter((job) => job.status === "running").length,
+  };
+};
+
+// =============================================================================
+// TIME FORMATTING UTILITIES
+// =============================================================================
+
+/**
+ * SOLID: Single responsibility - Format relative time (e.g., "2 hours ago")
+ */
+export const formatRelativeTime = (date: Date): string => {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSecs = Math.floor(diffMs / 1000);
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffSecs < 60) return "Just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+
+  return date.toLocaleDateString();
+};
+
+/**
+ * SOLID: Single responsibility - Format full timestamp for tooltips
+ */
+export const formatFullTimestamp = (date: Date): string => {
+  return date.toLocaleString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+};
+
+// =============================================================================
+// VALIDATION UTILITIES
+// =============================================================================
+
+/**
+ * SOLID: Single responsibility - Validate job data integrity
+ */
+export const validateJobData = (job: unknown): job is IJobData => {
+  if (typeof job !== "object" || job === null) return false;
+
+  const typedJob = job as { [key: string]: unknown };
+
+  return (
+    typeof typedJob.id === "number" &&
+    typeof typedJob.title === "string" &&
+    typeof typedJob.source_url === "string" &&
+    typeof typedJob.status === "string" &&
+    typeof typedJob.progress === "number" &&
+    typedJob.createdAt instanceof Date
+  );
+};
+
+/**
+ * SOLID: Single responsibility - Sanitize job data for safe display
+ */
+export const sanitizeJobData = (job: IJobData): IJobData => {
+  return {
+    ...job,
+    title: job.title.substring(0, 100), // Limit title length
+    error: job.error ? job.error.substring(0, 500) : job.error, // Limit error message length
+    progress: Math.max(0, Math.min(100, job.progress)), // Ensure progress is 0-100
+  };
+};
+
+/**
+ * SOLID: Single responsibility - Generate status message for job
+ * Replaces progress percentage with meaningful status messages
+ */
+export const getJobStatusMessage = (job: IJobData): string => {
+  switch (job.status) {
+    case "completed":
+      return "Job completed successfully";
+
+    case "failed":
+      // Show error reason if available, otherwise generic message
+      return job.error
+        ? `Job failed: ${job.error}`
+        : "Job failed: Unknown error";
+
+    case "cancelled":
+      return "Job was cancelled";
+
+    case "running":
+    case "scraping":
+      return job.progress > 0
+        ? `Processing: ${job.progress}%`
+        : "Job is running";
+
+    case "validating":
+      return "Validating URL";
+
+    case "pending":
+      return "Job is queued";
+
+    default:
+      return `Status: ${job.status}`;
+  }
+};

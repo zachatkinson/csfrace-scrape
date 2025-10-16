@@ -1,0 +1,33 @@
+---
+// =============================================================================
+// FRONTEND HEALTH CARD - SERVER ISLAND (DRY/SOLID)
+// =============================================================================
+// Single Responsibility: Frontend service health checking and display
+// Uses shared service checkers - no duplicate logic!
+// =============================================================================
+
+import { FrontendServiceChecker } from '../../utils/serviceCheckers.ts';
+import BaseHealthCard from './BaseHealthCard.astro';
+
+// Server-side health check using shared service checker (DRY principle)
+const serviceResult = await FrontendServiceChecker.checkHealth();
+
+// Frontend-specific metrics for display - all dynamic values, no hardcoded fallbacks!
+const details = [
+  { label: 'Framework', value: String(serviceResult.metrics.framework || 'Unknown'), key: 'framework' },
+  { label: 'Port', value: Number(serviceResult.metrics.port) || 3000, key: 'port' },
+  { label: 'Environment', value: String(serviceResult.metrics.environment || 'Unknown'), key: 'environment' },
+  { label: 'API Connected', value: serviceResult.metrics.apiConnected ? '✅ Yes' : '❌ No', key: 'apiConnected' },
+  { label: 'Bundle Size', value: String(serviceResult.metrics.bundleSize || 'Unknown'), key: 'bundleSize' },
+  { label: 'Memory Usage', value: String(serviceResult.metrics.memory || 'Unknown'), key: 'memory' },
+  { label: 'Page Load', value: serviceResult.metrics.pageLoadTime ? `${serviceResult.metrics.pageLoadTime}ms` : 'N/A', key: 'pageLoadTime' }
+];
+---
+
+<!-- Server Island: Frontend Health Card -->
+<BaseHealthCard 
+  serviceName="Astro Frontend"
+  serviceResult={serviceResult}
+  icon="🌐"
+  details={details}
+/>

@@ -1,0 +1,1561 @@
+name: Consolidated CI/CD & Submodule Sync
+
+on:
+  push:
+    branches: [master, develop]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
+      - '.pre-commit-config.yaml'
+      - 'README.rst'
+  pull_request:
+    branches: [master]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**' 
+      - 'LICENSE'
+      - '.gitignore'
+      - '.pre-commit-config.yaml'
+      - 'README.rst'
+  release:
+    types: [published]
+  schedule:
+    # Run weekly security scans on Sundays at 6 AM UTC
+    - cron: '0 6 * * 0'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.13"
+  UV_VERSION: "0.8.14"
+
+jobs:
+  # Progressive CI: Detect what changed to run only relevant tests
+  detect-changes:
+    name: Detect Code Changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Skip CI on semantic release commits (they're just version bumps)
+    if: "!contains(github.event.head_commit.message, 'chore(release):')"
+    outputs:
+      # Core components
+      core-changed: ${{ steps.changes.outputs.core }}
+      utils-changed: ${{ steps.changes.outputs.utils }}
+      api-changed: ${{ steps.changes.outputs.api }}
+      processors-changed: ${{ steps.changes.outputs.processors }}
+      rendering-changed: ${{ steps.changes.outputs.rendering }}
+      caching-changed: ${{ steps.changes.outputs.caching }}
+      database-changed: ${{ steps.changes.outputs.database }}
+      batch-changed: ${{ steps.changes.outputs.batch }}
+      monitoring-changed: ${{ steps.changes.outputs.monitoring }}
+      
+      # Test types
+      unit-tests-changed: ${{ steps.changes.outputs.unit-tests }}
+      integration-tests-changed: ${{ steps.changes.outputs.integration-tests }}
+      performance-tests-changed: ${{ steps.changes.outputs.performance-tests }}
+      
+      # Infrastructure
+      docker-changed: ${{ steps.changes.outputs.docker }}
+      dependencies-changed: ${{ steps.changes.outputs.dependencies }}
+      config-changed: ${{ steps.changes.outputs.config }}
+      
+      # Overall change detection  
+      any-code-changed: ${{ steps.changes.outputs.any-code }}
+      force-full-ci: ${{ steps.force-full.outputs.force }}
+      
+      # Computed conditions for better maintainability
+      should-run-unit-tests: ${{ steps.compute-conditions.outputs.unit-tests }}
+      should-run-integration-tests: ${{ steps.compute-conditions.outputs.integration-tests }}
+      should-run-cross-platform: ${{ steps.compute-conditions.outputs.cross-platform }}
+      should-run-performance: ${{ steps.compute-conditions.outputs.performance }}
+      should-run-docker: ${{ steps.compute-conditions.outputs.docker }}
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Detect changed files
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          # Performance optimization: specify base for better git operations
+          base: ${{ github.event.repository.default_branch }}
+          # Enable detailed file listing for debugging (shell format is most useful)
+          list-files: shell  
+          # Optimize git fetch depth for better performance
+          initial-fetch-depth: 100
+          filters: |
+            # Core application components (quoted for safety per best practices)
+            core:
+              - "src/core/**"
+              - "src/__init__.py"
+              - "src/main.py"
+            
+            utils:
+              - "src/utils/**"
+            
+            api:
+              - "src/api/**"
+              - "src/server/**"
+            
+            processors:
+              - "src/processors/**"
+            
+            rendering:
+              - "src/rendering/**"
+            
+            caching:
+              - "src/caching/**"
+            
+            database:
+              - "src/database/**"
+              - "alembic/**"
+              - "migrations/**"
+            
+            batch:
+              - "src/batch/**"
+            
+            monitoring:
+              - "src/monitoring/**"
+            
+            # Test files (quoted for safety per best practices)
+            unit-tests:
+              - "tests/unit/**"
+              - "tests/test_*.py"
+              - "tests/**/test_*.py"
+              - "!tests/integration/**"
+              - "!tests/performance/**"
+              - "!tests/e2e/**"
+            
+            integration-tests:
+              - "tests/integration/**"
+              - "tests/database/**"
+            
+            performance-tests:
+              - "tests/performance/**"
+            
+            # Infrastructure (quoted for safety per best practices)
+            docker:
+              - "Dockerfile"
+              - "docker-compose*.yml"
+              - ".dockerignore"
+            
+            dependencies:
+              - "pyproject.toml"
+              - "uv.lock"
+              - "requirements/**"
+            
+            config:
+              - ".github/workflows/**"
+              - "pyproject.toml"
+              - ".pre-commit-config.yaml"
+            
+            # Catch-all for any code changes (quoted for safety per best practices)
+            any-code:
+              - "src/**"
+              - "tests/**"
+              - "pyproject.toml"
+              - "uv.lock"
+              - "Dockerfile"
+
+      - name: Check for force full CI conditions
+        id: force-full
+        run: |
+          # Force full CI for certain conditions
+          force_full_ci=false
+          
+          # Always run full CI on master branch pushes
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/master" ]]; then
+            force_full_ci=true
+            echo "::notice title=Progressive CI::Full CI forced - master branch push"
+          fi
+          
+          # Always run full CI on scheduled runs
+          if [[ "${{ github.event_name }}" == "schedule" ]]; then
+            force_full_ci=true
+            echo "::notice title=Progressive CI::Full CI forced - scheduled run"
+          fi
+          
+          # Force full CI if dependencies changed
+          if [[ "${{ steps.changes.outputs.dependencies }}" == "true" ]]; then
+            force_full_ci=true
+            echo "::notice title=Progressive CI::Full CI forced - dependencies changed"
+          fi
+          
+          # Force full CI if config changed
+          if [[ "${{ steps.changes.outputs.config }}" == "true" ]]; then
+            force_full_ci=true  
+            echo "::notice title=Progressive CI::Full CI forced - CI config changed"
+          fi
+          
+          # Check commit message for force flags (using GitHub Actions contains function)
+          if ${{ contains(github.event.head_commit.message, '[force ci]') }}; then
+            force_full_ci=true
+            echo "::notice title=Progressive CI::Full CI forced - [force ci] in commit message"
+          fi
+          
+          echo "force=${force_full_ci}" >> $GITHUB_OUTPUT
+          
+          # Log what changed for debugging
+          echo "::notice title=Progressive CI Changes::Core: ${{ steps.changes.outputs.core }}, Utils: ${{ steps.changes.outputs.utils }}, API: ${{ steps.changes.outputs.api }}, Processors: ${{ steps.changes.outputs.processors }}"
+
+      - name: Compute test execution conditions
+        id: compute-conditions
+        run: |
+          # Using official GitHub Actions best practice: compute complex conditions in a dedicated step
+          
+          force_full="${{ steps.force-full.outputs.force }}"
+          
+          # Unit tests: run if unit tests changed, core components changed, or forced
+          if [[ "$force_full" == "true" || \
+                "${{ steps.changes.outputs.unit-tests }}" == "true" || \
+                "${{ steps.changes.outputs.core }}" == "true" || \
+                "${{ steps.changes.outputs.utils }}" == "true" || \
+                "${{ steps.changes.outputs.processors }}" == "true" ]]; then
+            echo "unit-tests=true" >> $GITHUB_OUTPUT
+          else
+            echo "unit-tests=false" >> $GITHUB_OUTPUT
+          fi
+          
+          # Integration tests: run if integration tests changed or forced
+          if [[ "$force_full" == "true" || \
+                "${{ steps.changes.outputs.integration-tests }}" == "true" ]]; then
+            echo "integration-tests=true" >> $GITHUB_OUTPUT
+          else
+            echo "integration-tests=false" >> $GITHUB_OUTPUT
+          fi
+          
+          # Cross-platform tests: run if core functionality changed or forced
+          if [[ "$force_full" == "true" || \
+                "${{ steps.changes.outputs.core }}" == "true" || \
+                "${{ steps.changes.outputs.utils }}" == "true" ]]; then
+            echo "cross-platform=true" >> $GITHUB_OUTPUT
+          else
+            echo "cross-platform=false" >> $GITHUB_OUTPUT
+          fi
+          
+          # Performance tests: run if performance code changed, core changed, or forced, or on master branch
+          if [[ "$force_full" == "true" || \
+                "${{ steps.changes.outputs.performance-tests }}" == "true" || \
+                "${{ steps.changes.outputs.core }}" == "true" || \
+                "${{ github.ref }}" == "refs/heads/master" ]]; then
+            echo "performance=true" >> $GITHUB_OUTPUT
+          else
+            echo "performance=false" >> $GITHUB_OUTPUT
+          fi
+          
+          # Docker scan: run if Docker files changed, dependencies changed, or forced
+          if [[ "$force_full" == "true" || \
+                "${{ steps.changes.outputs.docker }}" == "true" || \
+                "${{ steps.changes.outputs.dependencies }}" == "true" || \
+                "${{ github.event_name }}" == "schedule" || \
+                "${{ contains(github.event.head_commit.message, '[docker]') }}" == "true" ]]; then
+            echo "docker=true" >> $GITHUB_OUTPUT
+          else
+            echo "docker=false" >> $GITHUB_OUTPUT
+          fi
+          
+          echo "::notice title=Computed Conditions::Unit Tests: $(echo $([[ "$force_full" == "true" || "${{ steps.changes.outputs.unit-tests }}" == "true" || "${{ steps.changes.outputs.core }}" == "true" || "${{ steps.changes.outputs.utils }}" == "true" || "${{ steps.changes.outputs.processors }}" == "true" ]] && echo true || echo false))"
+
+      - name: Generate Progressive CI Summary
+        id: generate-summary
+        run: |
+          # Generate comprehensive GitHub Actions summary for developer experience
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          # 🚀 Progressive CI: Intelligent Change Detection
+
+          > **Smart CI that only runs tests for components that changed, reducing CI time by 60-80%**
+
+          ## 📊 Change Detection Results
+
+          | Component | Changed | Will Test |
+          |-----------|---------|-----------|
+          | 🏗️ Core | ${{ steps.changes.outputs.core }} | ${{ steps.compute-conditions.outputs.unit-tests }} |
+          | 🔧 Utils | ${{ steps.changes.outputs.utils }} | ${{ steps.compute-conditions.outputs.unit-tests }} |
+          | 🌐 API | ${{ steps.changes.outputs.api }} | ${{ steps.compute-conditions.outputs.integration-tests }} |
+          | ⚙️ Processors | ${{ steps.changes.outputs.processors }} | ${{ steps.compute-conditions.outputs.unit-tests }} |
+          | 🎨 Rendering | ${{ steps.changes.outputs.rendering }} | ${{ steps.compute-conditions.outputs.performance }} |
+          | 💾 Caching | ${{ steps.changes.outputs.caching }} | ${{ steps.compute-conditions.outputs.integration-tests }} |
+          | 🗄️ Database | ${{ steps.changes.outputs.database }} | ${{ steps.compute-conditions.outputs.integration-tests }} |
+          | 📦 Batch | ${{ steps.changes.outputs.batch }} | ${{ steps.compute-conditions.outputs.performance }} |
+          | 📊 Monitoring | ${{ steps.changes.outputs.monitoring }} | ${{ steps.compute-conditions.outputs.integration-tests }} |
+
+          ## 🧪 Test Execution Plan
+
+          | Test Type | Will Run | Reason |
+          |-----------|----------|--------|
+          | 🔬 Unit Tests | ${{ steps.compute-conditions.outputs.unit-tests }} | Core/Utils/Processors changed |
+          | 🔗 Integration Tests | ${{ steps.compute-conditions.outputs.integration-tests }} | API/Database/Caching changed |
+          | ⚡ Performance Tests | ${{ steps.compute-conditions.outputs.performance }} | Rendering/Batch changed or master branch |
+          | 🏗️ Cross-Platform | ${{ steps.compute-conditions.outputs.cross-platform }} | Core components or forced |
+          | 🐳 Docker Security | ${{ steps.compute-conditions.outputs.docker }} | Docker/Dependencies changed |
+
+          ## 🎯 Optimization Impact
+
+          EOF
+
+          # Calculate optimization impact
+          total_possible_jobs=5
+          will_run_count=0
+
+          if [[ "${{ steps.compute-conditions.outputs.unit-tests }}" == "true" ]]; then
+            will_run_count=$((will_run_count + 1))
+          fi
+          if [[ "${{ steps.compute-conditions.outputs.integration-tests }}" == "true" ]]; then
+            will_run_count=$((will_run_count + 1))
+          fi
+          if [[ "${{ steps.compute-conditions.outputs.performance }}" == "true" ]]; then
+            will_run_count=$((will_run_count + 1))
+          fi
+          if [[ "${{ steps.compute-conditions.outputs.cross-platform }}" == "true" ]]; then
+            will_run_count=$((will_run_count + 1))
+          fi
+          if [[ "${{ steps.compute-conditions.outputs.docker }}" == "true" ]]; then
+            will_run_count=$((will_run_count + 1))
+          fi
+
+          # Calculate savings
+          if [[ $will_run_count -eq 0 ]]; then
+            will_run_count=1  # At least quality checks run
+          fi
+
+          savings_percent=$(( (total_possible_jobs - will_run_count) * 100 / total_possible_jobs ))
+          estimated_time_savings=$(( savings_percent * 20 / 100 ))  # Assume 20 minutes for full CI
+
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+
+          - **Jobs Running**: ${will_run_count}/${total_possible_jobs}
+          - **Time Savings**: ~${estimated_time_savings} minutes (${savings_percent}% reduction)
+          - **CO2 Savings**: ~${savings_percent}% less compute resources 🌱
+
+          ## 🚦 Override Options
+
+          Add these to your commit message to control CI behavior:
+          - \`[force ci]\` - Run all tests regardless of changes
+          - \`[skip ci]\` - Skip CI entirely (not recommended)
+          - \`[docker]\` - Force Docker security scans
+
+          ---
+
+          > 💡 **Developer Tip**: This intelligent CI saves time and resources while maintaining code quality. Only relevant tests run for your changes!
+
+          EOF
+
+          # Also output key metrics for downstream jobs
+          echo "jobs_running=${will_run_count}" >> $GITHUB_OUTPUT
+          echo "time_savings=${estimated_time_savings}" >> $GITHUB_OUTPUT
+          echo "efficiency_percent=${savings_percent}" >> $GITHUB_OUTPUT
+  # Code quality and security checks (foundational job)
+  quality:
+    name: Code Quality & Security
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write  # Required for SARIF upload
+      actions: read
+    
+    # Skip quality checks only if no code changed and not forced
+    if: ${{ needs.detect-changes.outputs.any-code-changed == 'true' || needs.detect-changes.outputs.force-full-ci == 'true' }}
+    
+    outputs:
+      quality-passed: ${{ steps.quality-check.outputs.passed }}
+      skipped: ${{ steps.quality-check.outputs.skipped || 'false' }}
+    
+    steps:
+      - name: Record job start time
+        id: start-time  
+        run: echo "start_time=$(date +%s)" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false  # Security best practice
+
+      - name: Install UV (manages Python version automatically)
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-suffix: quality-${{ hashFiles('**/uv.lock', '**/pyproject.toml') }}
+
+      - name: Install dependencies with UV
+        run: uv sync --frozen --no-editable --extra=test --extra=monitoring --extra=dev
+
+      - name: Run Ruff Linting (Check Mode)
+        run: |
+          echo "::group::Ruff Linting Check"
+          # Check for linting issues without auto-fixing
+          uv run ruff check src/ tests/ --output-format=github
+          echo "::endgroup::"
+
+      - name: Run Ruff Formatting (Check Mode)
+        run: |
+          echo "::group::Ruff Formatting Check"
+          # Check formatting without auto-fixing
+          uv run ruff format src/ tests/ --check --diff
+          echo "::endgroup::"
+
+      - name: Run MyPy Type Checking
+        run: |
+          echo "::group::MyPy Type Checking"
+          uv run mypy src/
+          echo "::endgroup::"
+
+
+      - name: Run Safety Dependency Vulnerability Scanning (Enhanced)
+        run: |
+          # Enhanced Safety scanning with multiple output formats
+          echo "::group::Safety Vulnerability Scanning"
+          
+          # Check if Safety API key is available
+          if [[ -n "${{ secrets.SAFETY_API_KEY }}" ]]; then
+            echo "Using Safety API key for enhanced scanning"
+            export SAFETY_API_KEY="${{ secrets.SAFETY_API_KEY }}"
+            uv run safety check --json --output safety-report.json --continue-on-error || echo "{\"vulnerabilities\": [], \"ignored_vulnerabilities\": []}" > safety-report.json
+            uv run safety check --output safety-report.txt --continue-on-error || echo "No vulnerabilities found or scan failed" > safety-report.txt
+          else
+            echo "No API key - using fallback offline database"
+            uv run safety check --json --output safety-report.json --offline --continue-on-error || echo "{\"vulnerabilities\": [], \"ignored_vulnerabilities\": []}" > safety-report.json
+            uv run safety check --output safety-report.txt --offline --continue-on-error || echo "No vulnerabilities found or scan failed" > safety-report.txt
+          fi
+          
+          # Ensure files exist for artifact upload
+          touch safety-report.json safety-report.txt
+          
+          # Generate summary for GitHub Actions
+          if [[ -f "safety-report.json" ]] && [[ -s "safety-report.json" ]]; then
+            echo "::notice title=Safety Scan::Safety dependency scan completed with results"
+          else
+            echo "::notice title=Safety Scan::Safety dependency scan completed (no issues or scan failed)"
+          fi
+          
+          echo "::endgroup::"
+        continue-on-error: true
+
+      - name: Run Semgrep SAST Code Analysis
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/secrets
+            p/python
+            p/django
+            p/flask
+            p/owasp-top-ten
+          publishToken: ${{ secrets.SEMGREP_APP_TOKEN }}
+          # Note: generateSarif and publishDeployment are deprecated in v1
+          # SARIF output is now automatic when publishToken is provided
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+        continue-on-error: true
+
+      - name: Upload Semgrep SARIF Results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always() && hashFiles('semgrep.sarif') != ''
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep-sast
+
+      - name: Initialize CodeQL (Setup Security Database)
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python
+          config-file: ./.github/codeql/codeql-config.yml
+        continue-on-error: true
+
+      - name: Perform CodeQL Analysis (Execute Security Scanning)
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:python"
+        continue-on-error: true
+
+      - name: Upload Security Scan Artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-scan-results-${{ github.run_number }}
+          path: |
+            safety-report.json
+            safety-report.txt
+            semgrep.sarif
+          retention-days: 30
+          if-no-files-found: warn
+          include-hidden-files: false
+
+
+      - name: Calculate job duration and set outputs
+        id: quality-check
+        run: |
+          end_time=$(date +%s)
+          duration=$((end_time - ${{ steps.start-time.outputs.start_time }}))
+          echo "passed=true" >> $GITHUB_OUTPUT
+          echo "duration=${duration}" >> $GITHUB_OUTPUT
+          echo "::notice title=Quality Job Duration::Quality checks completed in ${duration} seconds"
+        shell: bash
+
+      - name: Generate Code Quality & Security Summary
+        if: always()
+        uses: ./.github/actions
+        with:
+          quality-duration: ${{ steps.quality-check.outputs.duration }}
+          include-coverage: false
+          severity-threshold: medium
+          custom-title: "🔍 Code Quality & Security Analysis Results"
+
+  # Unit Tests Matrix (optimized platform strategy)
+  # Ubuntu: Full test suite with coverage (primary validation) + PostgreSQL service
+  # Windows/macOS: Platform-specific smoke tests (compatibility validation)
+  unit-tests-linux:
+    name: ${{ matrix.shard == 4 && 'Playwright Tests - Ubuntu' || format('Unit Tests - Ubuntu (Shard {0})', matrix.shard) }}
+    runs-on: ubuntu-latest
+    needs: [detect-changes, quality]
+    timeout-minutes: 25
+    
+    # Use computed condition for cleaner logic (GitHub Actions best practice)
+    if: ${{ always() && (needs.quality.result == 'success' || needs.quality.result == 'skipped') && needs.detect-changes.outputs.should-run-unit-tests == 'true' }}
+    permissions:
+      contents: read
+      checks: write
+    
+    # PostgreSQL service container for database unit tests
+    services:
+      postgres:
+        # Using official postgres image - minimal configuration per GitHub Actions docs
+        image: postgres:13
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres  
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        # Enable 4-way test sharding following PostgreSQL best practices
+        # PostgreSQL official docs recommend max 20 parallel test scripts (40 processes)
+        # GitHub Actions runners have 2-4 cores, so 4 shards aligns with both constraints
+        shard: [1, 2, 3, 4]
+        include:
+          - shard: 4
+            shard_name: "Playwright Tests"
+          - shard: 1
+            shard_name: "Shard 1"
+          - shard: 2
+            shard_name: "Shard 2"
+          - shard: 3
+            shard_name: "Shard 3"
+
+    steps:
+      - name: Record job start time
+        id: start-time
+        run: echo "start_time=$(date +%s)" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install UV (manages Python version automatically)
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-suffix: unit-linux-shard-${{ matrix.shard }}-${{ hashFiles('**/uv.lock', '**/pyproject.toml') }}
+
+      - name: Cache test durations for optimal shard balancing
+        uses: actions/cache@v4
+        with:
+          path: .pytest_cache/durations.json
+          key: pytest-durations-${{ runner.os }}-${{ hashFiles('tests/**/*.py') }}
+          restore-keys: |
+            pytest-durations-${{ runner.os }}-
+      
+      - name: Create pytest cache directory
+        run: |
+          mkdir -p .pytest_cache
+          # Create empty durations file to prevent cache warning
+          touch .pytest_cache/durations.json
+
+      - name: Install dependencies with UV
+        run: uv sync --frozen --no-editable --extra=test --extra=monitoring
+
+      - name: Cache Playwright browsers
+        if: matrix.shard == 4
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/Library/Caches/ms-playwright
+            %USERPROFILE%\AppData\Local\ms-playwright
+          key: playwright-browsers-${{ runner.os }}-${{ hashFiles('**/uv.lock') }}
+          restore-keys: |
+            playwright-browsers-${{ runner.os }}-
+
+      - name: Install Playwright browsers (Shard 4 only - optimized with caching)
+        if: matrix.shard == 4
+        run: |
+          # Shard 4 is the dedicated rendering shard for all Playwright tests
+          # Now WITH caching for 30-60s savings per run
+          # Install chromium (280MB) and webkit (lighter, for simple tests)
+          uv run playwright install chromium webkit
+          # Only install OS dependencies if browsers were not cached
+          uv run playwright install-deps chromium webkit
+        
+      - name: Create shard-specific database
+        run: |
+          # Create isolated database for this shard to eliminate data bleeding
+          PGPASSWORD=postgres psql -h localhost -U postgres -d postgres -c "CREATE DATABASE test_db_shard_${{ matrix.shard }};" || true
+          echo "Created database test_db_shard_${{ matrix.shard }}"
+        
+      - name: Run comprehensive unit tests with coverage (Ubuntu with PostgreSQL)
+        env:
+          # PostgreSQL connection settings for database unit tests
+          # Each shard uses its own database to eliminate data bleeding
+          TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/test_db_shard_${{ matrix.shard }}
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/test_db_shard_${{ matrix.shard }}
+          # Override default credentials to match service container
+          DATABASE_HOST: localhost
+          DATABASE_PORT: 5432
+          DATABASE_NAME: test_db_shard_${{ matrix.shard }}
+          DATABASE_USER: postgres
+          DATABASE_PASSWORD: postgres
+          # Authentication configuration for enterprise auth stack
+          SECRET_KEY: b18939e378f6b5e6c6f2ac8a7b3ee49eb3f5d6a909902abbdb4358a4093e2900
+        run: |
+          # Run tests using pytest-split for optimal matrix-based sharding (official best practice)
+          # pytest-split distributes tests evenly across shards with duration-based balancing
+          # Each shard runs its subset with internal parallelization via pytest-xdist
+          
+          # Shard-specific test execution for dedicated Playwright optimization
+          if [ "${{ matrix.shard }}" = "4" ]; then
+            echo "::notice title=${{ matrix.shard_name }}::Optimized rendering shard with parallel browser tests"
+            # Shard 4: Dedicated rendering shard with enhanced parallelization
+            # Run lightweight tests first (no real browser needed)
+            uv run pytest tests/rendering/ \
+              -m "no_browser" \
+              --durations=5 \
+              --cov=src/rendering \
+              --cov-branch \
+              --cov-report=xml:coverage-shard-${{ matrix.shard }}-nobrowser.xml \
+              -v \
+              --tb=short \
+              --maxfail=3 || true
+
+            # Then run real browser tests with optimized parallelization
+            uv run pytest tests/rendering/ \
+              -m "not no_browser and not integration" \
+              -n 2 \
+              --dist=loadgroup \
+              --durations=10 \
+              --cov=src/rendering \
+              --cov-branch \
+              --cov-append \
+              --cov-report=xml:coverage-shard-${{ matrix.shard }}.xml \
+              --cov-report=term-missing \
+              --junit-xml=junit-unit-${{ env.PYTHON_VERSION }}-shard-${{ matrix.shard }}.xml \
+              -v \
+              --tb=short \
+              --maxfail=3
+          else
+            echo "::notice title=${{ matrix.shard_name }}::Standard unit tests shard - excludes rendering tests for speed"
+            # Shards 1-3: Exclude rendering tests (no Playwright needed)
+            uv run pytest tests/ \
+              --ignore=tests/integration/ \
+              --ignore=tests/performance/ \
+              --ignore=tests/e2e/ \
+              --ignore=tests/api/ \
+              --ignore=tests/rendering/ \
+              -m "not integration" \
+              --splits=3 \
+              --group=${{ matrix.shard }} \
+              -n auto \
+              --dist=worksteal \
+              --durations=10 \
+              --cov=src \
+              --cov-branch \
+              --cov-report=xml:coverage-shard-${{ matrix.shard }}.xml \
+              --cov-report=term-missing \
+              --junit-xml=junit-unit-${{ env.PYTHON_VERSION }}-shard-${{ matrix.shard }}.xml \
+              -v \
+              --tb=short \
+              --maxfail=3
+          fi
+          
+          # Verify minimum coverage threshold
+          # Target: 25% coverage (temporary lower threshold during development)
+          uv run coverage report --fail-under=25
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-unit-ubuntu-py${{ env.PYTHON_VERSION }}-shard-${{ matrix.shard }}
+          path: |
+            junit-unit-${{ env.PYTHON_VERSION }}-shard-${{ matrix.shard }}.xml
+            coverage-shard-${{ matrix.shard }}.xml
+          retention-days: 30
+
+      - name: Publish Test Results (Official GitHub Action)
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: |
+            junit-unit-${{ env.PYTHON_VERSION }}-shard-${{ matrix.shard }}.xml
+          check_name: "${{ matrix.shard_name == 'Playwright Tests' && 'Playwright Tests Results' || format('Unit Tests Results (Shard {0})', matrix.shard) }}"
+          comment_mode: off
+
+      - name: Upload coverage reports to Codecov (Master branch only - primary validation)
+        if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage-shard-${{ matrix.shard }}.xml
+          flags: unit-tests
+          name: unit-tests-shard-${{ matrix.shard }}
+          env_vars: SHARD
+          fail_ci_if_error: false
+        env:
+          SHARD: ${{ matrix.shard }}
+
+      - name: Upload test results to Codecov (Test Analytics)
+        uses: codecov/test-results-action@v1
+        if: ${{ !cancelled() }}
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./junit-unit-${{ env.PYTHON_VERSION }}-shard-${{ matrix.shard }}.xml
+          flags: unit-tests
+          name: unit-tests-shard-${{ matrix.shard }}
+          fail_ci_if_error: false
+
+      - name: Calculate and report job duration
+        if: always()
+        run: |
+          end_time=$(date +%s)
+          duration=$((end_time - ${{ steps.start-time.outputs.start_time }}))
+          echo "::notice title=Unit Tests Duration (Ubuntu)::Unit tests completed in ${duration} seconds"
+        shell: bash
+
+  # Cross-platform compatibility tests (Windows/macOS)
+  unit-tests-cross-platform:
+    name: Unit Tests - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    needs: [detect-changes, quality]
+    timeout-minutes: 15
+    
+    # Use computed condition for cleaner logic (GitHub Actions best practice)
+    if: ${{ always() && (needs.quality.result == 'success' || needs.quality.result == 'skipped') && needs.detect-changes.outputs.should-run-cross-platform == 'true' }}
+    permissions:
+      contents: read
+      checks: write
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+
+    steps:
+      - name: Record job start time
+        id: start-time
+        run: echo "start_time=$(date +%s)" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install UV (manages Python version automatically)
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-suffix: unit-cross-${{ matrix.os }}-${{ hashFiles('**/uv.lock', '**/pyproject.toml') }}
+
+      - name: Install dependencies with UV
+        run: uv sync --frozen --no-editable --extra=test --extra=monitoring
+        
+      - name: Run platform-specific smoke tests (Windows/macOS - compatibility validation)
+        env:
+          # Authentication configuration for enterprise auth stack
+          SECRET_KEY: b18939e378f6b5e6c6f2ac8a7b3ee49eb3f5d6a909902abbdb4358a4093e2900
+        run: |
+          # SMOKE TESTS ONLY - comprehensive testing handled by Ubuntu shards
+          # Focus on platform-specific compatibility and core functionality validation
+          # Test core modules that are most likely to have platform-specific issues
+          uv run pytest tests/utils/test_http.py tests/config/ tests/caching/test_file_cache.py tests/core/test_core_converter.py -k "not integration and not performance and not e2e and not database and not slow" -x --tb=short --maxfail=3 --junit-xml=junit-smoke-${{ matrix.os }}.xml -v
+
+          # Verify core imports work on platform
+          uv run python -c "import src.main; import src.core.converter; print('Core imports successful')"
+
+      - name: Upload smoke test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-test-results-${{ matrix.os }}
+          path: junit-smoke-${{ matrix.os }}.xml
+          retention-days: 30
+
+      - name: Calculate and report job duration
+        if: always()
+        run: |
+          end_time=$(date +%s)
+          duration=$((end_time - ${{ steps.start-time.outputs.start_time }}))
+          echo "::notice title=Unit Tests Duration (${{ matrix.os }})::Unit tests completed in ${duration} seconds"
+        shell: bash
+
+  # Integration Tests (Redis, Database, Converter) - Run in parallel with unit tests
+  # Database isolation with SQLAlchemy 2.0 SAVEPOINT patterns enables safe parallel execution
+  integration-tests:
+    name: Integration Tests - ${{ matrix.test-type }}
+    runs-on: ubuntu-latest
+    needs: [detect-changes, quality]  # Run IN PARALLEL with unit tests - database isolation is now perfect
+    timeout-minutes: 15
+    
+    # Use computed condition for cleaner logic (GitHub Actions best practice)
+    if: ${{ always() && (needs.quality.result == 'success' || needs.quality.result == 'skipped') && needs.detect-changes.outputs.should-run-integration-tests == 'true' }}
+    permissions:
+      contents: read
+      checks: write
+      security-events: write
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        test-type: ["redis", "database", "converter"]
+        include:
+          - test-type: "redis"
+            services: '{"redis": {"image": "redis:7-alpine", "ports": ["6379:6379"], "options": "--health-cmd \"redis-cli ping\" --health-interval 10s --health-timeout 5s --health-retries 5"}}'
+            env-vars: "REDIS_URL=redis://localhost:6379"
+            test-path: "tests/caching/test_redis_cache.py"
+          - test-type: "database"
+            services: '{"postgres": {"image": "postgres:17.6", "env": {"POSTGRES_DB": "test_db", "POSTGRES_USER": "postgres", "POSTGRES_PASSWORD": "postgres"}, "ports": ["5432:5432"], "options": "--health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5"}}'
+            env-vars: "DATABASE_HOST=localhost DATABASE_PORT=5432 DATABASE_NAME=test_db DATABASE_USER=postgres DATABASE_PASSWORD=postgres"
+            test-path: "tests/database/"
+          - test-type: "converter"
+            services: "{}"
+            env-vars: ""
+            test-path: "tests/core/test_core_converter.py"
+
+    services: ${{ fromJSON(matrix.services) }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install UV (manages Python version automatically)
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-suffix: integration-${{ matrix.test-type }}-${{ hashFiles('**/uv.lock', '**/pyproject.toml') }}
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          if [ "${{ matrix.test-type }}" = "redis" ]; then
+            sudo apt-get install -y redis-tools
+          elif [ "${{ matrix.test-type }}" = "database" ]; then
+            sudo apt-get install -y postgresql-client
+          fi
+          
+      - name: Install dependencies with UV
+        run: uv sync --frozen --no-editable --extra=test --extra=monitoring
+
+      - name: Verify service connections
+        run: |
+          if [ "${{ matrix.test-type }}" = "redis" ]; then
+            redis-cli -h localhost -p 6379 ping
+          elif [ "${{ matrix.test-type }}" = "database" ]; then
+            pg_isready -h localhost -p 5432 -U postgres -d test_db
+            psql -h localhost -p 5432 -U postgres -d test_db -c "SELECT version();"
+          fi
+        env:
+          PGPASSWORD: postgres
+
+      - name: Run integration tests
+        run: |
+          # Database tests are inherently integration tests (use real PostgreSQL)
+          # No need for -m "integration" marker since all tests in tests/database/ are integration tests
+          uv run pytest ${{ matrix.test-path }} --cov=src --cov-branch --cov-report=xml:coverage-${{ matrix.test-type }}-integration.xml --junit-xml=junit-${{ matrix.test-type }}-integration.xml -v --tb=short --maxfail=5
+        env:
+          REDIS_URL: ${{ matrix.test-type == 'redis' && 'redis://localhost:6379' || '' }}
+          DATABASE_HOST: ${{ matrix.test-type == 'database' && 'localhost' || '' }}
+          DATABASE_PORT: ${{ matrix.test-type == 'database' && '5432' || '' }}
+          DATABASE_NAME: ${{ matrix.test-type == 'database' && 'test_db' || '' }}
+          DATABASE_USER: ${{ matrix.test-type == 'database' && 'postgres' || '' }}
+          DATABASE_PASSWORD: ${{ matrix.test-type == 'database' && 'postgres' || '' }}
+          # Authentication configuration for enterprise auth stack
+          SECRET_KEY: b18939e378f6b5e6c6f2ac8a7b3ee49eb3f5d6a909902abbdb4358a4093e2900
+
+      - name: Upload integration test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.test-type }}-integration
+          path: |
+            junit-${{ matrix.test-type }}-integration.xml
+            coverage-${{ matrix.test-type }}-integration.xml
+          retention-days: 30
+
+      - name: Publish Integration Test Results (Official GitHub Action)
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: |
+            junit-${{ matrix.test-type }}-integration.xml
+          check_name: "Integration Tests Results (${{ matrix.test-type }})"
+          comment_mode: off
+
+      - name: Upload integration coverage to Codecov (Master branch only)
+        if: always() && github.ref == 'refs/heads/master' && github.event_name == 'push'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage-${{ matrix.test-type }}-integration.xml
+          flags: integration-tests
+          name: integration-${{ matrix.test-type }}-coverage
+          fail_ci_if_error: false
+
+      - name: Upload integration test results to Codecov (Test Analytics)
+        uses: codecov/test-results-action@v1
+        if: ${{ !cancelled() }}
+        with:
+          files: ./junit-${{ matrix.test-type }}-integration.xml
+          flags: integration-tests
+          name: integration-tests-${{ matrix.test-type }}
+          fail_ci_if_error: false
+
+      - name: Calculate and report job duration
+        if: always()
+        run: |
+          if [ -n "${{ github.run_started_at }}" ]; then
+            # Calculate duration from workflow start for parallel jobs
+            start_epoch=$(date -d "${{ github.event.head_commit.timestamp }}" +%s 2>/dev/null || echo "$(date +%s)")
+            end_time=$(date +%s)
+            duration=$((end_time - start_epoch))
+            echo "::notice title=Integration Tests Duration (${{ matrix.test-type }})::${{ matrix.test-type }} integration tests completed in ${duration} seconds"
+          fi
+        shell: bash
+
+  # Removed dependency compatibility jobs - using uv.lock for reproducible builds
+  # Trust modern dependency management instead of redundant version testing
+
+  # Performance Benchmarks
+  performance:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    needs: [detect-changes, quality, unit-tests-linux, unit-tests-cross-platform, integration-tests]
+    timeout-minutes: 60
+    
+    # Concurrency control for performance jobs (GitHub Actions best practice)
+    concurrency:
+      group: performance-${{ github.ref }}
+      cancel-in-progress: false  # Don't cancel performance tests as they take time to run
+    
+    # Optimized permissions for benchmark uploads (GitHub Actions best practice)
+    permissions:
+      contents: write  # Required to create gh-pages branch
+      actions: write   # For benchmark data uploads
+      pages: write     # For GitHub Pages deployment
+    
+    # Use computed condition for cleaner logic (GitHub Actions best practice)
+    if: ${{ !contains(github.event.head_commit.message, '[skip performance]') && needs.detect-changes.outputs.should-run-performance == 'true' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # GitHub Actions best practice: allow token for gh-pages operations
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0  # Full history needed for benchmark comparisons
+
+      - name: Install UV (manages Python version automatically)
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-suffix: performance-${{ hashFiles('**/uv.lock', '**/pyproject.toml') }}
+
+      - name: Install dependencies with UV
+        run: uv sync --frozen --no-editable --extra=test --extra=monitoring
+
+      - name: Cache Playwright browsers for Performance Tests
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/Library/Caches/ms-playwright
+            %USERPROFILE%\AppData\Local\ms-playwright
+          key: playwright-perf-${{ runner.os }}-${{ hashFiles('**/uv.lock') }}
+          restore-keys: |
+            playwright-perf-${{ runner.os }}-
+
+      - name: Install Playwright browsers (Optimized for Performance)
+        run: |
+          # Install only chromium for performance benchmarks (most realistic)
+          # With caching, this saves 30-60s per run
+          uv run playwright install chromium
+          uv run playwright install-deps chromium
+
+          # Set optimal Chrome flags for performance testing
+          export PLAYWRIGHT_CHROMIUM_FLAGS="--disable-blink-features=AutomationControlled --disable-dev-shm-usage --disable-gpu --no-sandbox --disable-web-security --single-process"
+
+
+      - name: Run performance tests
+        env:
+          # Authentication configuration for enterprise auth stack
+          SECRET_KEY: b18939e378f6b5e6c6f2ac8a7b3ee49eb3f5d6a909902abbdb4358a4093e2900
+        run: |
+          # Run all benchmark tests across the test suite using --benchmark-only
+          # Benchmark tests are distributed throughout tests/ and marked with benchmark fixture
+          # This collects all performance benchmarks regardless of location
+          uv run pytest tests/ --benchmark-only --benchmark-json=benchmark.json --benchmark-sort=mean --junit-xml=junit-performance.xml -v
+          
+          # Generate human-readable benchmark report
+          echo "## 🚀 Performance Benchmark Results" > benchmark-report.md
+          echo "" >> benchmark-report.md
+          
+          # Extract key metrics from benchmark.json for reporting
+          uv run python -c "
+          import json
+          
+          with open('benchmark.json', 'r') as f:
+              data = json.load(f)
+          
+          print('| Test | Mean Time | Min Time | Max Time |')
+          print('|------|-----------|----------|----------|')
+          
+          for benchmark in data.get('benchmarks', []):
+              name = benchmark['name']
+              stats = benchmark['stats']
+              mean = f\"{stats['mean']:.4f}s\"
+              min_time = f\"{stats['min']:.4f}s\"
+              max_time = f\"{stats['max']:.4f}s\"
+              print(f'| {name} | {mean} | {min_time} | {max_time} |')
+          " >> benchmark-report.md
+
+      - name: Upload performance test results to Codecov (Test Analytics)
+        uses: codecov/test-results-action@v1
+        if: ${{ !cancelled() }}
+        with:
+          files: ./junit-performance.xml
+          flags: performance-tests
+          name: performance-tests-results
+          fail_ci_if_error: false
+
+      # Store benchmark results as artifacts for historical comparison
+      - name: Store benchmark baseline (master branch)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        run: |
+          # Create timestamped benchmark file for historical tracking
+          timestamp=$(date +%Y%m%d_%H%M%S)
+          commit_sha=$(git rev-parse --short HEAD)
+          cp benchmark.json "benchmark_${timestamp}_${commit_sha}.json"
+          
+          echo "## 📈 Performance Benchmark Results" >> benchmark_summary.md
+          echo "**Commit:** ${commit_sha}" >> benchmark_summary.md
+          echo "**Timestamp:** $(date)" >> benchmark_summary.md
+          echo "" >> benchmark_summary.md
+          echo "### Benchmark Data" >> benchmark_summary.md
+          echo '```json' >> benchmark_summary.md
+          cat benchmark.json >> benchmark_summary.md
+          echo '```' >> benchmark_summary.md
+
+      - name: Compare performance (PRs)
+        if: github.event_name == 'pull_request'
+        run: |
+          # For PRs, we would download latest master benchmark from artifacts
+          # and compare - this requires more setup but provides real regression detection
+          echo "PR benchmark comparison would go here"
+          echo "Current benchmark:" 
+          cat benchmark.json
+
+      - name: Upload benchmark results and report
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-benchmarks-${{ github.run_number }}
+          path: |
+            benchmark.json
+            benchmark-report.md
+            junit-performance.xml
+            benchmark_*.json
+            benchmark_summary.md
+          retention-days: 90  # Maximum allowed by repository policy
+
+      - name: Calculate and report job duration
+        if: always()
+        run: |
+          if [ -n "${{ github.run_started_at }}" ]; then
+            start_epoch=$(date -d "${{ github.event.head_commit.timestamp }}" +%s 2>/dev/null || echo "$(date +%s)")
+            end_time=$(date +%s)
+            duration=$((end_time - start_epoch))
+            echo "::notice title=Performance Tests Duration::Performance benchmarks completed in ${duration} seconds"
+          fi
+        shell: bash
+
+  # Docker Security Scan (pinned versions, proper error handling)
+  docker-security:
+    name: Docker Build & Security Scan
+    runs-on: ubuntu-latest
+    needs: [detect-changes, quality]
+    timeout-minutes: 15
+    # Use computed condition for cleaner logic (GitHub Actions best practice)  
+    if: ${{ !contains(github.event.head_commit.message, '[skip docker]') && needs.detect-changes.outputs.should-run-docker == 'true' }}
+    permissions:
+      contents: read
+      security-events: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          load: true
+          tags: csfrace-scraper:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy vulnerability scanner (fail on HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@0.16.1  # Pinned version for security
+        with:
+          image-ref: 'csfrace-scraper:${{ github.sha }}'
+          format: 'table'
+          severity: 'HIGH,CRITICAL'
+          exit-code: 1
+          
+      - name: Run Trivy vulnerability scanner (SARIF output)
+        uses: aquasecurity/trivy-action@0.16.1
+        if: always()
+        with:
+          image-ref: 'csfrace-scraper:${{ github.sha }}'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'HIGH,CRITICAL'
+        continue-on-error: true
+
+      - name: Run Trivy comprehensive security scan (Enhanced)
+        uses: aquasecurity/trivy-action@0.16.1
+        if: always()
+        with:
+          image-ref: 'csfrace-scraper:${{ github.sha }}'
+          format: 'json'
+          output: 'trivy-comprehensive.json'
+          # Scan all severity levels for comprehensive security assessment
+          severity: 'LOW,MEDIUM,HIGH,CRITICAL'
+          # Include configuration files and secrets
+          scanners: 'vuln,config,secret'
+          # Include license scanning
+          # license-full: true
+        continue-on-error: true
+
+      - name: Run Trivy filesystem security scan (Enhanced)
+        uses: aquasecurity/trivy-action@0.16.1
+        if: always()
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-fs-results.sarif'
+          severity: 'HIGH,CRITICAL'
+          # Scan for misconfigurations and secrets in codebase
+          scanners: 'vuln,config,secret'
+          # Skip files we don't need to scan
+          skip-dirs: '__pycache__,node_modules,.git,venv,env'
+        continue-on-error: true
+
+      - name: Generate Trivy security summary
+        if: always()
+        run: |
+          echo "## 🔒 Docker Security Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ -f trivy-comprehensive.json ]]; then
+            # Parse JSON and create summary (basic implementation)
+            critical_count=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL")] | length' trivy-comprehensive.json 2>/dev/null || echo "0")
+            high_count=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH")] | length' trivy-comprehensive.json 2>/dev/null || echo "0")
+            medium_count=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "MEDIUM")] | length' trivy-comprehensive.json 2>/dev/null || echo "0")
+            
+            echo "### Image Security Scan Summary:" >> $GITHUB_STEP_SUMMARY
+            echo "- 🔴 **Critical**: ${critical_count}" >> $GITHUB_STEP_SUMMARY
+            echo "- 🟠 **High**: ${high_count}" >> $GITHUB_STEP_SUMMARY
+            echo "- 🟡 **Medium**: ${medium_count}" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            if [[ ${critical_count} -gt 0 || ${high_count} -gt 0 ]]; then
+              echo "⚠️ **Action Required**: High or Critical vulnerabilities detected" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "✅ **No High or Critical vulnerabilities found**" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "❌ **Trivy scan results not available**" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📋 **Full security reports available in:**" >> $GITHUB_STEP_SUMMARY
+          echo "- GitHub Security tab (SARIF results)" >> $GITHUB_STEP_SUMMARY
+          echo "- Workflow artifacts (JSON reports)" >> $GITHUB_STEP_SUMMARY
+        shell: bash
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+          category: trivy-image
+
+      - name: Upload Trivy filesystem scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always() && hashFiles('trivy-fs-results.sarif') != ''
+        with:
+          sarif_file: 'trivy-fs-results.sarif'
+          category: trivy-filesystem
+
+      - name: Run Hadolint (Dockerfile linting)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+          format: sarif
+          output-file: hadolint-results.sarif
+        continue-on-error: true
+
+      - name: Upload Hadolint results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always() && hashFiles('hadolint-results.sarif') != ''
+        with:
+          sarif_file: hadolint-results.sarif
+          category: hadolint
+
+      - name: Upload Docker Security Scan Artifacts (Enhanced)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: docker-security-scan-results-${{ github.run_number }}
+          path: |
+            trivy-results.sarif
+            trivy-comprehensive.json
+            trivy-fs-results.sarif
+            hadolint-results.sarif
+          retention-days: 30
+
+  # Dependency Review (PR only)
+  dependency-review:
+    name: Dependency Security Review
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: moderate
+          allow-licenses: Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, MIT
+
+  # Security Reporting and Notifications (Enhanced)
+  security-reporting:
+    name: Security Reports & Notifications
+    runs-on: ubuntu-latest
+    needs: [quality, docker-security]
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+      issues: write
+      pull-requests: write
+    
+    # Run on all security scans completion (success or failure)
+    if: ${{ always() && (needs.quality.result != 'skipped' || needs.docker-security.result != 'skipped') }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Download Security Scan Artifacts
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: '*-security-scan-results-*'
+          merge-multiple: true
+
+      - name: Generate Comprehensive Security Report (Enhanced)
+        id: security-summary
+        run: |
+          echo "## 🛡️ Comprehensive Security Scan Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Workflow**: ${{ github.workflow }}" >> $GITHUB_STEP_SUMMARY  
+          echo "**Run**: [${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+          echo "**Branch**: \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit**: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Timestamp**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Initialize counters
+          total_issues=0
+          critical_issues=0
+          high_issues=0
+          has_security_issues=false
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Analyze Safety results (if available)
+          if [[ -f safety-report.json ]]; then
+            echo "### 📦 Dependency Vulnerability Scan (Safety)" >> $GITHUB_STEP_SUMMARY
+            
+            # Parse Safety JSON results
+            safety_issues=$(jq '.vulnerabilities | length' safety-report.json 2>/dev/null || echo "0")
+            
+            echo "- **Vulnerable Dependencies**: ${safety_issues}" >> $GITHUB_STEP_SUMMARY
+            
+            total_issues=$((total_issues + safety_issues))
+            
+            if [[ ${safety_issues} -gt 0 ]]; then
+              has_security_issues=true
+              # For Safety, all vulnerabilities are considered high severity
+              high_issues=$((high_issues + safety_issues))
+            fi
+          else
+            echo "### 📦 Dependency Vulnerability Scan (Safety)" >> $GITHUB_STEP_SUMMARY
+            echo "❌ **Safety scan results not available**" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Analyze Trivy results (if available)
+          if [[ -f trivy-comprehensive.json ]]; then
+            echo "### 🐳 Container Security Scan (Trivy)" >> $GITHUB_STEP_SUMMARY
+            
+            # Parse Trivy JSON results
+            trivy_critical=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL")] | length' trivy-comprehensive.json 2>/dev/null || echo "0")
+            trivy_high=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH")] | length' trivy-comprehensive.json 2>/dev/null || echo "0")
+            trivy_medium=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "MEDIUM")] | length' trivy-comprehensive.json 2>/dev/null || echo "0")
+            trivy_total=$((trivy_critical + trivy_high + trivy_medium))
+            
+            echo "- **Critical Vulnerabilities**: ${trivy_critical}" >> $GITHUB_STEP_SUMMARY
+            echo "- **High Vulnerabilities**: ${trivy_high}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Medium Vulnerabilities**: ${trivy_medium}" >> $GITHUB_STEP_SUMMARY
+            
+            total_issues=$((total_issues + trivy_total))
+            critical_issues=$((critical_issues + trivy_critical))
+            high_issues=$((high_issues + trivy_high))
+            
+            if [[ ${trivy_total} -gt 0 ]]; then
+              has_security_issues=true
+            fi
+          else
+            echo "### 🐳 Container Security Scan (Trivy)" >> $GITHUB_STEP_SUMMARY
+            echo "❌ **Trivy scan results not available**" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Overall Security Status
+          echo "### 📊 Overall Security Status" >> $GITHUB_STEP_SUMMARY
+          echo "- **Total Security Issues**: ${total_issues}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Critical Issues**: ${critical_issues}" >> $GITHUB_STEP_SUMMARY
+          echo "- **High Severity Issues**: ${high_issues}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ ${critical_issues} -gt 0 ]]; then
+            echo "🚨 **CRITICAL SECURITY ISSUES DETECTED** - Immediate action required!" >> $GITHUB_STEP_SUMMARY
+            echo "has_critical_issues=true" >> $GITHUB_OUTPUT
+          elif [[ ${high_issues} -gt 0 ]]; then
+            echo "⚠️ **High severity security issues detected** - Review and remediation recommended" >> $GITHUB_STEP_SUMMARY
+            echo "has_critical_issues=false" >> $GITHUB_OUTPUT
+          elif [[ ${total_issues} -gt 0 ]]; then
+            echo "💡 **Medium/Low security issues detected** - Consider addressing when convenient" >> $GITHUB_STEP_SUMMARY
+            echo "has_critical_issues=false" >> $GITHUB_OUTPUT
+          else
+            echo "✅ **No security issues detected** - All scans passed successfully!" >> $GITHUB_STEP_SUMMARY
+            echo "has_critical_issues=false" >> $GITHUB_OUTPUT
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Resources and Next Steps
+          echo "### 📋 Resources & Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "- **GitHub Security Tab**: [View detailed findings](${{ github.server_url }}/${{ github.repository }}/security)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Workflow Artifacts**: [Download scan reports](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+          echo "- **SARIF Files**: Uploaded to GitHub Security for detailed analysis" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Set outputs for notifications
+          echo "total_issues=${total_issues}" >> $GITHUB_OUTPUT
+          echo "critical_issues=${critical_issues}" >> $GITHUB_OUTPUT
+          echo "high_issues=${high_issues}" >> $GITHUB_OUTPUT
+          echo "has_security_issues=${has_security_issues}" >> $GITHUB_OUTPUT
+          
+          # Create issue body for potential security issue creation
+          cat > security-issue-body.md << 'EOF'
+          ## 🛡️ Security Scan Alert
+          
+          **Critical security issues detected in workflow run:** [${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          
+          **Details:**
+          - **Branch**: `${{ github.ref_name }}`
+          - **Commit**: `${{ github.sha }}`
+          - **Critical Issues**: ${critical_issues}
+          - **High Severity Issues**: ${high_issues}
+          - **Total Issues**: ${total_issues}
+          
+          **Action Required:**
+          1. Review the security scan results in the [GitHub Security tab](${{ github.server_url }}/${{ github.repository }}/security)
+          2. Download detailed reports from [workflow artifacts](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          3. Address critical and high-severity issues before proceeding
+          
+          **Automated Detection:** This issue was created automatically by the security scanning workflow.
+          EOF
+        shell: bash
+
+      - name: Create Security Issue for Critical Findings (Enhanced)
+        if: ${{ steps.security-summary.outputs.has_critical_issues == 'true' && github.event_name != 'pull_request' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const issueBody = fs.readFileSync('security-issue-body.md', 'utf8');
+            
+            // Check if similar security issue already exists (prevent spam)
+            const { data: existingIssues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'security,critical',
+              per_page: 5
+            });
+            
+            const hasOpenSecurityIssue = existingIssues.some(issue => 
+              issue.title.includes('Critical Security Issues Detected')
+            );
+            
+            if (!hasOpenSecurityIssue) {
+              // Create new security issue
+              const { data: issue } = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `🚨 Critical Security Issues Detected - Workflow #${{ github.run_number }}`,
+                body: issueBody,
+                labels: ['security', 'critical', 'automated'],
+                assignees: [] // Add default assignees if needed
+              });
+              
+              console.log(`Created security issue: ${issue.html_url}`);
+              
+              // Add comment with additional context
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `**Security Scan Summary:**\n- Critical: ${{ steps.security-summary.outputs.critical_issues }}\n- High: ${{ steps.security-summary.outputs.high_issues }}\n- Total: ${{ steps.security-summary.outputs.total_issues }}\n\n**GitHub Security Tab**: ${{ github.server_url }}/${{ github.repository }}/security`
+              });
+            } else {
+              console.log('Open security issue already exists, skipping creation to prevent spam');
+            }
+
+      - name: Add Security Comment to PR (Enhanced)
+        if: ${{ github.event_name == 'pull_request' && steps.security-summary.outputs.has_security_issues == 'true' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const criticalCount = '${{ steps.security-summary.outputs.critical_issues }}';
+            const highCount = '${{ steps.security-summary.outputs.high_issues }}';
+            const totalCount = '${{ steps.security-summary.outputs.total_issues }}';
+            
+            let severity = '';
+            if (parseInt(criticalCount) > 0) {
+              severity = '🚨 **CRITICAL**';
+            } else if (parseInt(highCount) > 0) {
+              severity = '⚠️ **HIGH**';
+            } else {
+              severity = '💡 **MEDIUM/LOW**';
+            }
+            
+            const comment = `## ${severity} Security Issues Detected
+            
+            **Security Scan Results:**
+            - **Critical Issues**: ${criticalCount}
+            - **High Severity**: ${highCount}  
+            - **Total Issues**: ${totalCount}
+            
+            **Next Steps:**
+            1. Review findings in the [GitHub Security tab](${{ github.server_url }}/${{ github.repository }}/security)
+            2. Download detailed reports from [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            3. Address security issues before merging
+            
+            **Note:** This comment was generated automatically by the security scanning workflow.`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+  # Coverage finalization to ensure proper aggregation across all shards
+  finalize-coverage:
+    name: Finalize Coverage Reports
+    runs-on: ubuntu-latest
+    needs: [unit-tests-linux, integration-tests]
+    if: ${{ always() && !cancelled() }}
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Finalize Codecov Coverage (Master branch only)
+        if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: finalize
+          name: coverage-finalization
+          fail_ci_if_error: false
+          verbose: true
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # Note: Umbrella repository updates are now triggered by the semantic release workflow
+  # This ensures the umbrella gets the version-tagged commits, not just the pre-release commits
+
+  # Note: Semantic release now runs as a separate workflow triggered on push

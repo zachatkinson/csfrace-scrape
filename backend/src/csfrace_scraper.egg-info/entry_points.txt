@@ -1,0 +1,2 @@
+[console_scripts]
+csfrace-scraper = src.main:main

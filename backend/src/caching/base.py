@@ -1,0 +1,343 @@
+"""Base cache interfaces and types."""
+
+import abc
+import base64
+import hashlib
+import json
+import time
+from dataclasses import dataclass
+from enum import Enum
+from pathlib import Path
+from typing import Any
+
+from src.core.decorators import cache_error_handler
+from src.core.logging_hierarchy import get_cache_logger
+
+from ..constants.caching import (
+    CACHE_BACKEND,
+    CACHE_TTL_HTML,
+    CACHE_TTL_IMAGES,
+    CACHE_TTL_METADATA,
+    DEFAULT_TTL,
+    HASH_LENGTH,
+    KEY_READABLE_OFFSET,
+    MAX_CACHE_SIZE_MB,
+    MAX_KEY_LENGTH,
+    REDIS_DB,
+    REDIS_HOST,
+    REDIS_KEY_PREFIX,
+    REDIS_PORT,
+    ROBOTS_CACHE_DURATION,
+)
+
+logger = get_cache_logger()
+
+
+class CacheBackend(Enum):
+    """Supported cache backend types."""
+
+    FILE = "file"
+    REDIS = "redis"
+    MEMORY = "memory"
+
+
+@dataclass
+class CacheConfig:
+    """Configuration for caching system using centralized constants."""
+
+    backend: CacheBackend = CacheBackend.FILE
+    ttl_default: int = DEFAULT_TTL
+    ttl_html: int = CACHE_TTL_HTML
+    ttl_images: int = CACHE_TTL_IMAGES
+    ttl_metadata: int = CACHE_TTL_METADATA
+    ttl_robots: int = ROBOTS_CACHE_DURATION
+
+    # File cache settings
+    cache_dir: Path = Path(".cache")
+    max_cache_size_mb: int = MAX_CACHE_SIZE_MB
+
+    # Redis cache settings - using centralized constants
+    redis_host: str = REDIS_HOST
+    redis_port: int = REDIS_PORT
+    redis_db: int = REDIS_DB
+    redis_password: str | None = None
+    redis_key_prefix: str = REDIS_KEY_PREFIX
+
+    # General settings
+    compress: bool = True
+    cleanup_on_startup: bool = True
+    max_key_length: int = MAX_KEY_LENGTH
+
+    @classmethod
+    def from_environment(cls) -> "CacheConfig":
+        """Create cache config from environment variables.
+
+        Returns:
+            CacheConfig instance configured from environment
+        """
+        backend_str = CACHE_BACKEND.lower()
+
+        # Map string to enum
+        backend_map = {
+            "file": CacheBackend.FILE,
+            "redis": CacheBackend.REDIS,
+            "memory": CacheBackend.MEMORY,
+        }
+
+        backend = backend_map.get(backend_str, CacheBackend.FILE)
+
+        return cls(backend=backend)
+
+
+@dataclass
+class CacheEntry:
+    """Represents a cache entry with metadata."""
+
+    key: str
+    value: Any
+    created_at: float
+    ttl: int
+    content_type: str = "generic"
+    size_bytes: int = 0
+    compressed: bool = False
+
+    @property
+    def is_expired(self) -> bool:
+        """Check if cache entry has expired."""
+        if self.ttl <= 0:  # TTL of 0 or negative means no expiration
+            return False
+        return time.time() > (self.created_at + self.ttl)
+
+    @property
+    def age_seconds(self) -> float:
+        """Get age of cache entry in seconds."""
+        return time.time() - self.created_at
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert cache entry to dictionary for serialization."""
+        return {
+            "key": self.key,
+            "value": self.value,
+            "created_at": self.created_at,
+            "ttl": self.ttl,
+            "content_type": self.content_type,
+            "size_bytes": self.size_bytes,
+            "compressed": self.compressed,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "CacheEntry":
+        """Create cache entry from dictionary."""
+        return cls(**data)
+
+
+class BaseCacheBackend(abc.ABC):
+    """Abstract base class for cache backends."""
+
+    def __init__(self, config: CacheConfig):
+        """Initialize cache backend.
+
+        Args:
+            config: Cache configuration
+        """
+        self.config = config
+        self.logger = get_cache_logger()
+
+    @abc.abstractmethod
+    async def get(self, key: str) -> CacheEntry | None:
+        """Get a cache entry by key.
+
+        Args:
+            key: Cache key
+
+        Returns:
+            Cache entry if found and not expired, None otherwise
+        """
+        pass
+
+    @abc.abstractmethod
+    async def set(
+        self, key: str, value: Any, ttl: int | None = None, content_type: str = "generic"
+    ) -> bool:
+        """Set a cache entry.
+
+        Args:
+            key: Cache key
+            value: Value to cache
+            ttl: Time to live in seconds (uses default if None)
+            content_type: Type of content being cached
+
+        Returns:
+            True if successfully cached
+        """
+        pass
+
+    @abc.abstractmethod
+    async def delete(self, key: str) -> bool:
+        """Delete a cache entry.
+
+        Args:
+            key: Cache key to delete
+
+        Returns:
+            True if entry was deleted
+        """
+        pass
+
+    @abc.abstractmethod
+    async def clear(self) -> bool:
+        """Clear all cache entries.
+
+        Returns:
+            True if cache was cleared successfully
+        """
+        pass
+
+    @abc.abstractmethod
+    async def stats(self) -> dict[str, Any]:
+        """Get cache statistics.
+
+        Returns:
+            Dictionary with cache statistics
+        """
+        pass
+
+    @abc.abstractmethod
+    async def cleanup_expired(self) -> int:
+        """Clean up expired cache entries.
+
+        Returns:
+            Number of entries cleaned up
+        """
+        pass
+
+    def generate_key(self, *parts: str | int | float) -> str:
+        """Generate a cache key from parts.
+
+        Args:
+            *parts: Key components
+
+        Returns:
+            Generated cache key
+        """
+        # Create key from parts
+        key_parts = [str(part) for part in parts]
+        raw_key = ":".join(key_parts)
+
+        # Hash if too long
+        if len(raw_key) > self.config.max_key_length:
+            key_hash = hashlib.sha256(raw_key.encode()).hexdigest()[:HASH_LENGTH]
+            # Keep some readable part + hash
+            readable_part = raw_key[: self.config.max_key_length - KEY_READABLE_OFFSET]
+            return f"{readable_part}:{key_hash}"
+
+        return raw_key
+
+    def get_ttl_for_content_type(self, content_type: str) -> int:
+        """Get appropriate TTL for content type.
+
+        Args:
+            content_type: Type of content
+
+        Returns:
+            TTL in seconds
+        """
+        ttl_mapping = {
+            "html": self.config.ttl_html,
+            "image": self.config.ttl_images,
+            "metadata": self.config.ttl_metadata,
+            "robots": self.config.ttl_robots,
+        }
+
+        return ttl_mapping.get(content_type, self.config.ttl_default)
+
+    def _compress_data(self, data: Any) -> bytes:
+        """Compress data if compression is enabled.
+
+        Args:
+            data: Data to compress
+
+        Returns:
+            Compressed data as bytes
+        """
+        if not self.config.compress:
+            return json.dumps(data, default=self._json_serializer).encode("utf-8")
+
+        import gzip
+
+        json_data = json.dumps(data, default=self._json_serializer).encode("utf-8")
+        return gzip.compress(json_data)
+
+    def _decompress_data(self, data: bytes, compressed: bool = False) -> Any:
+        """Decompress data if it was compressed.
+
+        Args:
+            data: Compressed data
+            compressed: Whether data is compressed
+
+        Returns:
+            Decompressed data
+        """
+        if not compressed or not self.config.compress:
+            json_str = data.decode("utf-8")
+        else:
+            import gzip
+
+            decompressed = gzip.decompress(data)
+            json_str = decompressed.decode("utf-8")
+
+        # Parse JSON with custom object hook
+        return json.loads(json_str, object_hook=self._json_deserializer)
+
+    def _json_deserializer(self, obj: dict[str, Any]) -> Any:
+        """Custom JSON deserializer for non-standard types.
+
+        Args:
+            obj: Dictionary from JSON parsing
+
+        Returns:
+            Deserialized object
+        """
+        if isinstance(obj, dict) and "__type__" in obj and "__value__" in obj:
+            obj_type = obj["__type__"]
+            obj_value = obj["__value__"]
+
+            if obj_type == "bytes":
+                import base64
+
+                return base64.b64decode(obj_value.encode("ascii"))
+            elif obj_type == "Path":
+                return Path(obj_value)
+
+        return obj
+
+    @cache_error_handler("calculate cache value size")
+    def _calculate_size(self, value: Any) -> int:
+        """Calculate the size of a value in bytes.
+
+        Args:
+            value: Value to measure
+
+        Returns:
+            Size in bytes (0 if calculation fails)
+        """
+        if isinstance(value, str | bytes):
+            return len(value.encode("utf-8") if isinstance(value, str) else value)
+        else:
+            return len(json.dumps(value, default=self._json_serializer).encode("utf-8"))
+
+    def _json_serializer(self, obj: Any) -> Any:
+        """Custom JSON serializer for non-standard types.
+
+        Args:
+            obj: Object to serialize
+
+        Returns:
+            Serializable representation
+        """
+        if isinstance(obj, bytes):
+            return {"__type__": "bytes", "__value__": base64.b64encode(obj).decode("ascii")}
+        if isinstance(obj, Path):
+            return {"__type__": "Path", "__value__": str(obj)}
+
+        raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")

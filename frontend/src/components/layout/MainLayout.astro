@@ -1,0 +1,959 @@
+---
+/**
+ * MainLayout - Core layout with Liquid Glass design system
+ * HYBRID APPROACH: Server Islands + React polling for real-time updates
+ * Zero duplicate code - perfect architecture!
+ */
+
+// Import global styles (includes Tailwind + Liquid Glass)
+import '../../styles/global.css';
+// Removed unused imports for TypeScript compliance
+// Note: ViewTransitions from astro:transitions is deprecated
+// Modern Astro uses built-in view transitions via transition:* directives
+// Import pure UI component for health status (Astro MCP best practice)
+import EventDrivenFooterStatus from '../health/EventDrivenFooterStatus.astro'; // Astro native component
+// Import DRY/SOLID Auth Modal Component
+import AuthModal from '../modals/AuthModal.astro';
+// Import DRY/SOLID App Settings Modal Component
+import AppSettingsModal from '../modals/AppSettingsModal.astro';
+// Import DRY/SOLID Sign In Button Component
+import AuthButton from '../AuthButton.astro';
+// Import DRY/SOLID User Settings Modal Component
+import UserSettingsModal from '../modals/UserSettingsModal.astro';
+// Import DRY/SOLID Icon Components
+import { IconManage } from '../icons';
+// Import Version Display Component
+import VersionDisplay from '../VersionDisplay.astro';
+
+
+export interface Props {
+  title: string;
+  description?: string;
+  enableRealTimeUpdates?: boolean;
+}
+
+const {
+  title,
+  description = "WordPress to Shopify content converter with ultra-modern Liquid Glass UI"
+} = Astro.props;
+
+// Note: Authentication will be handled client-side since JWT tokens are stored in localStorage
+// This follows modern SPA patterns where authentication state is managed in the browser
+---
+
+<!doctype html>
+<html lang="en" class="h-full">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="description" content={description} />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title}</title>
+
+    <!-- Modern Astro view transitions are built-in via transition:* directives -->
+
+    <!-- Performance optimizations -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
+    <!-- Preload critical background images - modern AVIF with JPG fallback -->
+    <link rel="preload" as="image" href="/scrape_bg_mobile.avif" type="image/avif" media="(max-width: 767px)">
+    <link rel="preload" as="image" href="/scrape_bg_tablet.avif" type="image/avif" media="(min-width: 768px) and (max-width: 1023px)">
+    <link rel="preload" as="image" href="/scrape_bg_desktop.avif" type="image/avif" media="(min-width: 1024px)">
+  </head>
+  
+  <body class="h-full overflow-x-hidden">
+    <div class="min-h-screen flex flex-col liquid-glass-layout">
+      
+      <!-- Header -->
+      <header class="sticky top-0 z-50 glass-card border-b border-white/10"
+              transition:persist="app-header">
+        <div class="max-w-7xl mx-auto px-8 py-6">
+          <div class="flex items-center justify-between">
+            <!-- Logo -->
+            <div class="flex items-center space-x-4">
+              <div class="w-10 h-10 glass-card bg-gradient-to-br from-blue-400 to-purple-500 rounded-lg flex items-center justify-center">
+                <span class="text-white font-bold text-lg">CS</span>
+              </div>
+              <div>
+                <h1 class="text-2xl font-bold text-white">CSFrace Scrape</h1>
+                <p class="text-white/60 text-sm">WordPress to Shopify Converter</p>
+              </div>
+            </div>
+            
+            <!-- Navigation & Settings -->
+            <div class="flex items-center space-x-4">
+              <!-- Navigation Links -->
+              <nav class="hidden md:flex items-center space-x-4">
+                <a href="/" class="px-3 py-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all duration-200">Converter</a>
+                <a href="/dashboard" class="px-3 py-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all duration-200">Job Dashboard</a>
+                <a href="/test-health" class="px-3 py-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-all duration-200">Health Status</a>
+              </nav>
+
+              <!-- User Settings Button (reactive to auth state) -->
+              <div id="user-settings-button-container" class={Astro.locals.isAuthenticated ? "" : "hidden"}>
+                <button
+                  id="user-settings-button"
+                  class="p-2 glass-card glass-button bg-white/5 hover:bg-white/15 rounded-lg transition-all duration-200"
+                  title="User Settings"
+                  aria-label="User Settings"
+                  onclick="window.dispatchEvent(new CustomEvent('open-user-settings'))"
+                >
+                  <IconManage class="w-5 h-5 text-white fill-current" />
+                </button>
+              </div>
+
+              <!-- Settings Button -->
+              <button
+                id="settings-toggle"
+                class="p-2 glass-card glass-button bg-white/5 hover:bg-white/15 rounded-lg transition-all duration-200"
+                title="Application Settings"
+                aria-label="Open Application Settings"
+              >
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </button>
+
+              <!-- Auth Button (Sign In) - DRY/SOLID Component -->
+              <AuthButton />
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- Auth Modal - React Island -->
+      <AuthModal />
+
+      <!-- Settings Panel - Astro Island -->
+      <AppSettingsModal />
+
+      <!-- User Settings Modal - Astro Island -->
+      <UserSettingsModal />
+
+      <!-- Main Content -->
+      <main class="flex-1 min-h-screen">
+        <div class="max-w-7xl mx-auto px-8 py-8">
+          <slot />
+        </div>
+      </main>
+
+      <!-- Footer with Server Island Health Status -->
+      <footer class="bg-black/90 backdrop-blur-lg border-t border-white/10 mt-16"
+              transition:persist="app-footer">
+        <div class="max-w-7xl mx-auto px-8 py-8">
+          <div class="flex flex-col lg:flex-row lg:justify-between lg:items-start space-y-8 lg:space-y-0">
+            
+            <!-- Left Side: System Status Panel - DRY/SOLID Server Island -->
+            <div class="flex-shrink-0">
+              <h3 class="text-white/90 font-semibold mb-4 text-sm uppercase tracking-wider">System Status</h3>
+              
+              <!-- Server Island for Real-time Health Status (DRY/SOLID) -->
+              <div class="space-y-3">
+                <!-- Pure UI Component - Reads from nanostore (ASTRO MCP BEST PRACTICE) -->
+                <EventDrivenFooterStatus />
+              </div>
+              
+              <!-- Troubleshooting Link -->
+              <div class="mt-4 pt-4 border-t border-white/10">
+                <a 
+                  href="/test-health" 
+                  class="px-4 py-3 bg-gradient-to-r from-blue-500/80 to-purple-600/80 text-white hover:from-blue-600/90 hover:to-purple-700/90 transition-all duration-200 flex items-center space-x-2 rounded-lg border border-white/20 font-medium"
+                  title="Advanced system diagnostics and troubleshooting"
+                >
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  <span>System Health Dashboard</span>
+                </a>
+              </div>
+            </div>
+
+            <!-- Right Side: Creative Branding Attribution -->
+            <div class="lg:text-right">
+              <div class="flex lg:justify-end">
+                <a href="https://creativebranding.io" target="_blank" rel="noopener noreferrer" 
+                   class="inline-block transition-all duration-300 hover:scale-105 hover:brightness-110">
+                  <!-- Creative Branding Logo -->
+                  <img src="/cb-logo_mono.png" alt="Creative Branding" class="h-[140px] w-auto mx-auto opacity-90 hover:opacity-100 transition-opacity duration-300" />
+                </a>
+              </div>
+              
+              <!-- Technical Details below logo -->
+              <div class="mt-6 text-center lg:text-right">
+                <h3 class="text-white/90 font-semibold mb-3 text-sm uppercase tracking-wider">Built With</h3>
+                <div class="flex flex-wrap justify-center lg:justify-end gap-2 text-xs mb-4">
+                  <span class="px-2 py-1 bg-blue-500/20 text-blue-300 rounded">Astro v5.13.5</span>
+                  <span class="px-2 py-1 bg-purple-500/20 text-purple-300 rounded">FastAPI</span>
+                  <span class="px-2 py-1 bg-green-500/20 text-green-300 rounded">Server Islands</span>
+                </div>
+                <ul class="text-white/60 text-sm space-y-1 text-center lg:text-right">
+                  <li>✅ DRY/SOLID Principles</li>
+                  <li>✅ Zero Code Duplication</li>
+                  <li>✅ Real-time Health Monitoring</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Bottom Bar -->
+          <div class="mt-8 pt-6 border-t border-white/10 text-center">
+            <div class="flex justify-between items-center">
+              <p class="text-white/40 text-xs">
+                © 2025 Creative Branding. Built with Astro, FastAPI, and modern web technologies.
+              </p>
+              <VersionDisplay position="footer" theme="dark" />
+            </div>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+
+    <!-- ASTRO MCP BEST PRACTICE: Health system initialization now handled directly in CompactHealthStatus.astro -->
+    <!-- Following SOLID Single Responsibility Principle: health initialization within health component -->
+
+    <!-- Responsive Background Image Styling (Modern 2025 Best Practices) -->
+    <style>
+      /* Liquid Glass optimized body styles with responsive background images */
+      body {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        min-height: 100vh;
+        position: relative;
+      }
+      
+      /* Modern 2025: AVIF-first responsive background images */
+      /* Mobile portrait - 50KB vs 1MB original (95% smaller!) */
+      body {
+        background: url('/scrape_bg_mobile.avif') center center/cover no-repeat fixed;
+      }
+      
+      /* Tablet screens - optimized aspect ratio */
+      @media (min-width: 768px) {
+        body {
+          background: url('/scrape_bg_tablet.avif') center center/cover no-repeat fixed;
+        }
+      }
+      
+      /* Desktop landscape - full resolution */  
+      @media (min-width: 1024px) {
+        body {
+          background: url('/scrape_bg_desktop.avif') center center/cover no-repeat fixed;
+        }
+      }
+      
+      /* Note: AVIF will load first if supported (all modern browsers 2025)
+         JPEG acts as fallback for the 5% edge case */
+      
+      /* Glass overlay for optimal contrast */
+      body::before {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.4);
+        z-index: -1;
+        pointer-events: none;
+      }
+    </style>
+
+    <!-- Modal and Panel JavaScript -->
+    <script>
+
+      // Define global window interfaces for type safety
+      interface CSFRaceTiming {
+        JOB: {
+          STATUS_CHECK_INTERVAL: number;
+          TIMEOUT: number;
+          POLL_INTERVAL: number;
+        };
+        API: {
+          DEFAULT_TIMEOUT: number;
+          RETRY_DELAY_BASE: number;
+          RETRY_MAX_ATTEMPTS: number;
+        };
+        UI: {
+          NORMAL_ANIMATION: number;
+          FAST_ANIMATION: number;
+          LOADING_MIN_DISPLAY: number;
+        };
+      }
+
+      interface HealthSSEService {
+        eventSource: EventSource | null;
+        isConnected: boolean;
+        retryCount: number;
+        maxRetries: number;
+        retryDelay: number;
+        connect(): Promise<void>;
+        disconnect(): void;
+        handleRetry(): void;
+      }
+
+      interface JobSSEService {
+        eventSource: EventSource | null;
+        isConnected: boolean;
+        retryCount: number;
+        maxRetries: number;
+        retryDelay: number;
+        connect(): Promise<void>;
+        disconnect(): void;
+        handleRetry(): void;
+        handleInitialData(event: MessageEvent): void;
+        handleJobEvent(event: MessageEvent, eventType: string): void;
+      }
+
+      interface PerformanceSSEService {
+        connect(): Promise<void>;
+        disconnect(): void;
+        getConnectionStatus(): { isConnected: boolean; retryCount: number };
+      }
+
+      declare global {
+        interface Window {
+          CSFRACE_TIMING: CSFRaceTiming;
+          __healthSSEService?: HealthSSEService;
+          __jobSSEService?: JobSSEService;
+          __performanceSSEService?: PerformanceSSEService;
+        }
+      }
+
+      // Initialize global timing constants
+      window.CSFRACE_TIMING = {
+        JOB: {
+          STATUS_CHECK_INTERVAL: 2000,
+          TIMEOUT: 300000,
+          POLL_INTERVAL: 2000
+        },
+        API: {
+          DEFAULT_TIMEOUT: 30000,
+          RETRY_DELAY_BASE: 1000,
+          RETRY_MAX_ATTEMPTS: 3
+        },
+        UI: {
+          NORMAL_ANIMATION: 300,
+          FAST_ANIMATION: 150,
+          LOADING_MIN_DISPLAY: 200
+        }
+      };
+
+      // App settings functionality now handled by AppSettingsModal.astro custom element
+      // All modal behavior moved to BaseModalManager for DRY/SOLID architecture
+
+      // Import logger
+      import { createContextLogger } from '/src/utils/logger.js';
+      const authLogger = createContextLogger('MainLayout-Auth');
+
+      // Settings button handler
+      document.addEventListener('DOMContentLoaded', () => {
+        // CRITICAL: Initialize API client with auth token from storage
+        import('../../lib/api-client').then(({ initializeAPIClientAuth }) => {
+          initializeAPIClientAuth();
+        });
+
+        // Check for OAuth success from callback redirect (localStorage for cross-tab)
+        const oauthSuccess = localStorage.getItem('oauth_success');
+        if (oauthSuccess) {
+          try {
+            const authData = JSON.parse(oauthSuccess);
+            // Remove the flag
+            localStorage.removeItem('oauth_success');
+
+            // CRITICAL: Reinitialize API client with new token after OAuth login
+            import('../../lib/api-client').then(({ initializeAPIClientAuth }) => {
+              initializeAPIClientAuth();
+            });
+
+            // Trigger auth success events to update UI state
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('user-logged-in', {
+                detail: authData.user
+              }));
+              window.dispatchEvent(new CustomEvent('auth-success', {
+                detail: authData.user
+              }));
+              authLogger.info('OAuth authentication successful', { user: authData.user });
+            }, 100);
+          } catch (error) {
+            authLogger.error('Failed to parse OAuth success data', { error });
+            localStorage.removeItem('oauth_success');
+          }
+        }
+
+        // Listen for OAuth success from other tabs (cross-tab authentication)
+        window.addEventListener('storage', (event) => {
+          if (event.key === 'oauth_success' && event.newValue) {
+            try {
+              const authData = JSON.parse(event.newValue);
+              authLogger.info('OAuth success detected from another tab', { user: authData.user });
+
+              // Trigger auth success events
+              setTimeout(() => {
+                window.dispatchEvent(new CustomEvent('user-logged-in', {
+                  detail: authData.user
+                }));
+                window.dispatchEvent(new CustomEvent('auth-success', {
+                  detail: authData.user
+                }));
+                updateUserSettingsVisibility();
+              }, 100);
+            } catch (error) {
+              authLogger.error('Failed to parse OAuth success from storage event', { error });
+            }
+          }
+        });
+
+        const settingsBtn = document.getElementById('settings-toggle');
+        if (settingsBtn) {
+          settingsBtn.addEventListener('click', () => {
+            window.dispatchEvent(new CustomEvent('toggle-settings'));
+          });
+        }
+
+        // Auth button handler (same pattern as settings)
+        const authBtn = document.getElementById('auth-toggle');
+        if (authBtn) {
+          authBtn.addEventListener('click', () => {
+            window.dispatchEvent(new CustomEvent('open-auth-modal'));
+          });
+        }
+
+        // Update user settings button visibility based on auth state
+        function updateUserSettingsVisibility() {
+          const userSettingsContainer = document.getElementById('user-settings-button-container');
+          if (userSettingsContainer) {
+            // Always check with the backend since OAuth uses HTTP-only cookies
+            // that can't be read by JavaScript
+            fetch('/auth/me', {
+              method: 'GET',
+              credentials: 'include',
+              headers: { 'Accept': 'application/json' }
+            })
+            .then(response => {
+              if (response.ok) {
+                userSettingsContainer.classList.remove('hidden');
+                authLogger.info('Authentication verified - showing user settings');
+              } else {
+                userSettingsContainer.classList.add('hidden');
+                authLogger.info('Authentication invalid - hiding user settings', { status: response.status });
+                // Clean up invalid tokens
+                localStorage.removeItem('auth_token');
+                sessionStorage.removeItem('auth_token');
+                localStorage.removeItem('oauth_success');
+              }
+            })
+            .catch((error) => {
+              userSettingsContainer.classList.add('hidden');
+              authLogger.warn('Authentication check failed', { error: error instanceof Error ? error.message : String(error) });
+              // Don't clean up tokens on network error - server might be down
+            });
+          }
+        }
+
+        // Update visibility on page load and auth state changes
+        updateUserSettingsVisibility();
+        
+        // Listen for authentication state changes
+        window.addEventListener('user-logged-in', updateUserSettingsVisibility);
+        window.addEventListener('user-logged-out', updateUserSettingsVisibility);
+        window.addEventListener('auth-tokens-updated', updateUserSettingsVisibility);
+        window.addEventListener('auth-success', updateUserSettingsVisibility); // Fixed: was 'authSuccess', now 'auth-success'
+        
+        // Poll periodically to catch auth changes
+        setInterval(updateUserSettingsVisibility, 30000);
+      });
+
+      // Legacy authentication function removed - now handled by Astro middleware with HTTP-only cookies
+
+    </script>
+
+    <!-- ASTRO MCP BEST PRACTICE: Global SSE Service in MainLayout -->
+    <script>
+      import { formatTimestamp } from '/src/utils/timezone';
+      import { getApiBaseUrl } from '/src/constants/api';
+      import { createContextLogger } from '/src/utils/logger.js';
+
+      const sseLogger = createContextLogger('SSEService');
+
+      // SINGLETON PATTERN: Global health SSE service (Astro MCP best practice)
+      if (!window.__healthSSEService) {
+        sseLogger.info('Creating global SSE health service');
+
+        window.__healthSSEService = {
+          eventSource: null,
+          isConnected: false,
+          retryCount: 0,
+          maxRetries: 5,
+          retryDelay: 5000,
+
+          async connect() {
+            if (this.eventSource && this.isConnected) {
+              sseLogger.info('Already connected, skipping');
+              return;
+            }
+
+            try {
+              const backendUrl = getApiBaseUrl();
+              const sseUrl = `${backendUrl}/health/stream`;
+              sseLogger.info('Establishing connection', { sseUrl });
+              this.eventSource = new EventSource(sseUrl);
+
+              this.eventSource.onopen = () => {
+                this.isConnected = true;
+                this.retryCount = 0;
+                sseLogger.info('Connection established');
+              };
+
+              // Define types for health SSE events
+              interface ServiceData {
+                response_time_ms?: number;
+                [key: string]: unknown;
+              }
+
+              interface BackendService {
+                service: string;
+                status: string;
+                data?: ServiceData;
+              }
+
+              interface InitialHealthData {
+                timestamp?: number;
+                services?: BackendService[];
+              }
+
+              // TypeScript: Match exact types from healthStore/serviceCheckers (DRY principle)
+              type ServiceStatus = "up" | "degraded" | "down" | "error";
+
+              interface IServiceResult {
+                status: ServiceStatus;
+                message: string;
+                metrics: { responseTime?: number; [key: string]: unknown };
+                error?: string;
+                timestamp: number;
+              }
+
+              interface IHealthServiceStatuses {
+                frontend: IServiceResult | null;
+                backend: IServiceResult | null;
+                database: IServiceResult | null;
+                cache: IServiceResult | null;
+              }
+
+              // Listen for initial health data on connection (backend sends "initial-data" event)
+              this.eventSource.addEventListener('initial-data', async (event: MessageEvent) => {
+                try {
+                  const initialData: InitialHealthData = JSON.parse(event.data);
+                  sseLogger.info('Initial health data received', { initialData });
+
+                  // Update nanostore with initial data
+                  const { updateHealthData } = await import('/src/stores/healthStore');
+                  const updateTime = new Date(initialData.timestamp || Date.now());
+
+                  // Transform backend service format to frontend format
+                  // CRITICAL: Match IHealthServiceStatuses interface (frontend|backend|database|cache)
+                  const frontendServiceData: IHealthServiceStatuses = {
+                    frontend: null,
+                    backend: null,
+                    database: null,
+                    cache: null
+                  };
+
+                  if (initialData.services && Array.isArray(initialData.services)) {
+                    initialData.services.forEach((service: BackendService) => {
+                      const serviceName = service.service as keyof IHealthServiceStatuses;
+                      // TypeScript: Cast status to ServiceStatus type for type safety (no 'unknown')
+                      const serviceStatus = (service.status === 'healthy' ? 'up' : service.status) as ServiceStatus;
+                      frontendServiceData[serviceName] = {
+                        status: serviceStatus,
+                        message: `${serviceName} service initialized`,
+                        metrics: {
+                          responseTime: service.data?.response_time_ms || 0,
+                          ...service.data
+                        },
+                        timestamp: updateTime.getTime()
+                      };
+                    });
+                  }
+
+                  const healthData = {
+                    services: frontendServiceData,
+                    overallStatus: {
+                      status: 'up' as const,
+                      text: 'Services Initialized',
+                      summary: 'Initial health data loaded',
+                      color: 'bg-green-500'
+                    },
+                    metadata: {
+                      timestamp: updateTime.getTime(),
+                      isPolling: false,
+                      isVisible: true,
+                      lastUpdateFormatted: formatTimestamp(updateTime)
+                    }
+                  };
+
+                  updateHealthData(healthData);
+                } catch (error) {
+                  sseLogger.error('Error processing initial data', { error });
+                }
+              });
+
+              // Listen for service updates
+              this.eventSource.addEventListener('service-update', async (event: MessageEvent) => {
+                try {
+                  const serviceUpdate = JSON.parse(event.data);
+                  sseLogger.info('Service update received', { serviceUpdate });
+
+                  // Update nanostore (Astro MCP pattern)
+                  const { updateHealthData, getCurrentHealthData } = await import('/src/stores/healthStore');
+                  const updateTime = new Date(serviceUpdate.timestamp || Date.now());
+
+                  const currentData = getCurrentHealthData();
+                  let services = { ...currentData.services };
+
+                  if (serviceUpdate.services) {
+                    // Update all services from bulk update
+                    Object.assign(services, serviceUpdate.services);
+                  } else if (serviceUpdate.service && serviceUpdate.status) {
+                    // Update specific service
+                    const serviceKey = serviceUpdate.service as keyof typeof services;
+                    if (Object.prototype.hasOwnProperty.call(services, serviceKey)) {
+                      services[serviceKey] = {
+                        status: serviceUpdate.status === 'healthy' ? 'up' : serviceUpdate.status,
+                        message: `${serviceUpdate.service} service updated`,
+                        metrics: {
+                          responseTime: serviceUpdate.data?.response_time_ms || 0,
+                          ...serviceUpdate.data
+                        },
+                        error: serviceUpdate.error,
+                        timestamp: updateTime.getTime()
+                      };
+                    }
+                  }
+
+                  const healthData = {
+                    services,
+                    overallStatus: {
+                      status: 'up' as const,
+                      text: 'Services Updated',
+                      summary: 'Services updated via SSE',
+                      color: 'bg-green-500'
+                    },
+                    metadata: {
+                      timestamp: updateTime.getTime(),
+                      isPolling: false,
+                      isVisible: true,
+                      lastUpdateFormatted: formatTimestamp(updateTime)
+                    }
+                  };
+
+                  updateHealthData(healthData);
+                } catch (error) {
+                  sseLogger.error('Error processing update', { error });
+                }
+              });
+
+              // Performance metrics now handled by dedicated PerformanceSSEService
+              // Following SOLID principles: Single Responsibility - health SSE only handles health events
+
+              this.eventSource.onerror = (error: Event) => {
+                const readyState = this.eventSource?.readyState;
+                sseLogger.info('SSE error details', {
+                  readyState,
+                  EventSourceConstants: {
+                    CONNECTING: EventSource.CONNECTING,
+                    OPEN: EventSource.OPEN,
+                    CLOSED: EventSource.CLOSED
+                  }
+                });
+
+                // Check if this might be due to backend unavailable or CORS issues
+                const isConnectionClosed = readyState === EventSource.CLOSED;
+                const isConnecting = readyState === EventSource.CONNECTING;
+
+                if (isConnectionClosed) {
+                  sseLogger.info('SSE connection closed - backend may be unavailable or CORS issue', { error, readyState });
+                } else if (isConnecting) {
+                  sseLogger.info('SSE connection still trying to establish', { error, readyState });
+                } else {
+                  sseLogger.error('SSE unexpected connection error', { error, readyState });
+                }
+
+                this.isConnected = false;
+
+                // Don't retry immediately if we're still connecting
+                if (!isConnecting) {
+                  // Add a longer delay before retry to avoid rapid reconnections
+                  setTimeout(() => {
+                    this.handleRetry();
+                  }, 3000);
+                }
+              };
+
+            } catch (error) {
+              sseLogger.error('Failed to create connection', { error });
+              this.handleRetry();
+            }
+          },
+
+          handleRetry() {
+            if (this.retryCount < this.maxRetries) {
+              const delay = this.retryDelay * Math.pow(2, this.retryCount);
+              this.retryCount++;
+              sseLogger.info('Retrying connection', { delay, retryCount: this.retryCount, maxRetries: this.maxRetries });
+              setTimeout(() => this.connect(), delay);
+            }
+          },
+
+          disconnect() {
+            if (this.eventSource) {
+              this.eventSource.close();
+              this.eventSource = null;
+            }
+            this.isConnected = false;
+          }
+        };
+
+        // Initialize SSE service - this is for public health data, should work for all users
+        document.addEventListener('DOMContentLoaded', () => {
+          // Wait a moment to let the page fully load
+          setTimeout(() => {
+            window.__healthSSEService?.connect();
+          }, 1000);
+        });
+
+        // Cleanup on unload
+        window.addEventListener('beforeunload', () => {
+          window.__healthSSEService?.disconnect();
+        });
+      }
+    </script>
+
+    <!-- ASTRO MCP BEST PRACTICE: Global Job SSE Service in MainLayout (DRY pattern) -->
+    <script>
+      import { getApiBaseUrl } from '/src/constants/api';
+      import { createContextLogger } from '/src/utils/logger.js';
+
+      const jobLogger = createContextLogger('JobSSEService');
+
+      // SINGLETON PATTERN: Global job SSE service (following same pattern as health SSE)
+      if (!window.__jobSSEService) {
+        jobLogger.info('Creating global SSE job service');
+
+        window.__jobSSEService = {
+          eventSource: null,
+          isConnected: false,
+          retryCount: 0,
+          maxRetries: 5,
+          retryDelay: 5000,
+
+          async connect() {
+            if (this.eventSource && this.isConnected) {
+              jobLogger.info('Already connected, skipping');
+              return;
+            }
+
+            try {
+              // Use window.location.origin to connect to same origin (nginx routes to backend)
+              const baseUrl = typeof window !== 'undefined' ? window.location.origin : getApiBaseUrl();
+              // CRITICAL: Use /jobs/stream endpoint (correct backend endpoint)
+              const sseUrl = `${baseUrl}/jobs/stream`;
+              jobLogger.info('Establishing connection to job events:', { sseUrl });
+              this.eventSource = new EventSource(sseUrl, {
+                withCredentials: true // CRITICAL: Include cookies for authentication
+              });
+
+              this.eventSource.onopen = () => {
+                this.isConnected = true;
+                this.retryCount = 0;
+                jobLogger.info('Connection established');
+              };
+
+              // Listen for ALL job-* events from the SSE stream (backend uses job-created, job-status-update, etc.)
+              this.eventSource.addEventListener('initial-data', (event: MessageEvent) => this.handleInitialData(event));
+              this.eventSource.addEventListener('job-created', (event: MessageEvent) => this.handleJobEvent(event, 'created'));
+              this.eventSource.addEventListener('job-status-update', (event: MessageEvent) => this.handleJobEvent(event, 'status'));
+              this.eventSource.addEventListener('job-progress', (event: MessageEvent) => this.handleJobEvent(event, 'progress'));
+              this.eventSource.addEventListener('job-deleted', (event: MessageEvent) => this.handleJobEvent(event, 'deleted'));
+              this.eventSource.addEventListener('job-error', (event: MessageEvent) => this.handleJobEvent(event, 'error'));
+            } catch (error) {
+              jobLogger.error('Failed to create Job SSE connection', { error });
+              this.handleRetry();
+            }
+          },
+
+          handleInitialData(event: MessageEvent) {
+            try {
+              const initialData = JSON.parse(event.data);
+              jobLogger.info('Initial job data received from SSE', {
+                totalJobs: initialData.total_jobs,
+                jobCount: initialData.jobs?.length
+              });
+
+              // Dispatch initial data event for components (like Recent Conversions)
+              const initialDataEvent = new CustomEvent('jobsInitialData', {
+                detail: {
+                  jobs: initialData.jobs || [],
+                  totalJobs: initialData.total_jobs || 0,
+                  activeJobs: initialData.active_jobs || 0,
+                  completedJobs: initialData.completed_jobs || 0,
+                  failedJobs: initialData.failed_jobs || 0
+                }
+              });
+              window.dispatchEvent(initialDataEvent);
+
+            } catch (error) {
+              jobLogger.error('Error processing initial job data', { error });
+            }
+          },
+
+          handleJobEvent(event: MessageEvent, eventType: string) {
+            try {
+              const eventData = JSON.parse(event.data);
+              jobLogger.info(`Job ${eventType} event received`, { eventData });
+
+              // Send FULL event structure to components (includes job_id, status, data, etc.)
+              const jobUpdate = eventData;
+
+              // Dispatch custom event for components to listen to
+              const jobUpdateEvent = new CustomEvent('jobSSEUpdate', {
+                detail: { jobUpdate, eventType }
+              });
+              window.dispatchEvent(jobUpdateEvent);
+
+              // Also dispatch refresh event for existing components
+              const refreshEvent = new CustomEvent('jobsDataRefresh', {
+                detail: { source: 'sse', jobUpdate, eventType }
+              });
+              window.dispatchEvent(refreshEvent);
+
+            } catch (error) {
+              jobLogger.error(`Error processing job ${eventType} event`, { error });
+            }
+          },
+
+          handleRetry() {
+            // Retry logic moved to separate method for clarity
+            if (this.retryCount < this.maxRetries) {
+              const delay = this.retryDelay * Math.pow(2, this.retryCount);
+              this.retryCount++;
+              jobLogger.info(`Retrying in ${delay}ms (${this.retryCount}/${this.maxRetries})`);
+              setTimeout(() => this.connect(), delay);
+            }
+          },
+
+          disconnect() {
+            if (this.eventSource) {
+              this.eventSource.close();
+              this.eventSource = null;
+            }
+            this.isConnected = false;
+          }
+        };
+
+        // PLACEHOLDER - REMOVED DUPLICATE ERROR HANDLER BLOCK
+        // Error handler is now inline in connect() method above
+        // Following DRY principle: single error handling location
+
+        // Initialize job SSE service ONLY for authenticated users
+        document.addEventListener('DOMContentLoaded', async () => {
+          // CRITICAL: Delay authentication check to allow OAuth callback to complete first
+          // OAuth callback sets cookies and takes 1-2 seconds, so we wait 3 seconds to be safe
+          // This prevents "Not authenticated" errors when redirecting from OAuth providers
+          await new Promise(resolve => setTimeout(resolve, 3000));
+
+          // Check authentication via backend since we use HTTP-only cookies
+          // JavaScript can't read HTTP-only cookies, so we need to verify with server
+          try {
+            const response = await fetch('/auth/me', {
+              method: 'GET',
+              credentials: 'include', // CRITICAL: Include HTTP-only cookies
+              headers: { 'Accept': 'application/json' }
+            });
+
+            if (response.ok) {
+              jobLogger.info('User authenticated - connecting to job SSE');
+              window.__jobSSEService?.connect();
+            } else {
+              jobLogger.info('User not authenticated - skipping job SSE connection', {
+                status: response.status
+              });
+            }
+          } catch (error) {
+            jobLogger.warn('Authentication check failed - skipping job SSE connection', {
+              error: error instanceof Error ? error.message : String(error)
+            });
+          }
+        });
+
+        // Also connect when user logs in
+        window.addEventListener('user-logged-in', () => {
+          jobLogger.info('User login detected - connecting to job SSE');
+          window.__jobSSEService?.connect();
+        });
+
+        // Disconnect when user logs out
+        window.addEventListener('user-logged-out', () => {
+          jobLogger.info('User logout detected - disconnecting from job SSE');
+          window.__jobSSEService?.disconnect();
+        });
+
+        // Cleanup on unload
+        window.addEventListener('beforeunload', () => {
+          window.__jobSSEService?.disconnect();
+        });
+      }
+    </script>
+
+    <!-- PLACEHOLDER REMOVED - Now handled inline above -->
+    <!-- Job SSE error handling integrated into connect() method -->
+    <!-- Following SOLID Single Responsibility Principle -->
+
+    <!-- ASTRO MCP BEST PRACTICE: Global Performance SSE Service in MainLayout (SOLID pattern) -->
+    <script>
+      import { performanceSSEService } from '/src/services/PerformanceSSEService.ts';
+      import { createContextLogger } from '/src/utils/logger.js';
+      import { getTimezonePreferences, setTimezonePreferences } from '/src/utils/timezone.js';
+
+      const performanceLogger = createContextLogger('PerformanceSSEMain');
+
+      // Initialize timezone preferences with 12-hour format
+      document.addEventListener('DOMContentLoaded', () => {
+        const currentPrefs = getTimezonePreferences();
+        // Ensure 12-hour format is always used for service card timestamps
+        if (currentPrefs.use24Hour !== false) {
+          setTimezonePreferences({ use24Hour: false });
+        }
+      });
+
+      // SINGLETON PATTERN: Global performance SSE service (following SOLID principles)
+      if (!window.__performanceSSEService) {
+        performanceLogger.info('Creating global SSE performance service');
+
+        window.__performanceSSEService = performanceSSEService;
+
+        // Initialize public performance SSE service (no authentication required)
+        document.addEventListener('DOMContentLoaded', () => {
+          // Performance metrics are public monitoring data (non-sensitive)
+          // Backend endpoint /performance/stream is public (no auth required)
+          performanceLogger.info('Connecting to public performance SSE endpoint');
+          window.__performanceSSEService?.connect();
+        });
+
+        // Cleanup on unload
+        window.addEventListener('beforeunload', () => {
+          window.__performanceSSEService?.disconnect();
+        });
+      }
+    </script>
+
+
+    <!-- ASTRO MCP BEST PRACTICE: Component hydration handled by client:load directive above -->
+    <!-- EventDrivenFooterStatus is automatically initialized by Astro Islands -->
+
+    <!-- Authentication Context now handled by AuthContextProvider Island above -->
+  </body>
+</html>

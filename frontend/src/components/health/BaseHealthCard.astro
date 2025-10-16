@@ -1,0 +1,178 @@
+---
+// =============================================================================
+// BASE HEALTH CARD - DRY/SOLID SERVER ISLAND COMPONENT
+// =============================================================================
+// Single Responsibility: Display health status for any service
+// Open/Closed: Extensible for different service types
+// Interface Segregation: Clean props interface
+// Dependency Inversion: Depends on IServiceResult abstraction
+// =============================================================================
+
+import type { IServiceResult } from '../../utils/serviceCheckers.ts';
+import { formatTimestamp } from '/src/utils/timezone';
+
+export interface Props {
+  serviceName: string;
+  serviceResult?: IServiceResult;
+  icon?: string;
+  details?: Array<{
+    label: string;
+    value: string | number;
+    key: string;
+  }>;
+  showRefreshButton?: boolean;
+  customIdPrefix?: string;
+  defaultMessage?: string;
+}
+
+const {
+  serviceName,
+  serviceResult,
+  details = [],
+  showRefreshButton = false,
+  customIdPrefix,
+  defaultMessage = "Loading..."
+} = Astro.props;
+
+// Generate ID prefix - use custom or fallback to service name
+const idPrefix = customIdPrefix || serviceName.toLowerCase().replace(/\s+/g, '-');
+
+// Handle optional serviceResult for initial loading state
+const responseTime = serviceResult?.metrics?.responseTime;
+---
+
+<!-- Health Card Component -->
+<div
+  class="glass-card p-6"
+  data-service={idPrefix}
+  data-service-name={serviceName}
+  data-service-result={JSON.stringify(serviceResult || {})}
+>
+  <!-- Header -->
+  <div class="flex items-center justify-between mb-4">
+    <h3 class="text-xl font-semibold text-white">{serviceName}</h3>
+    <div class="flex items-center">
+      <span id={`${idPrefix}-status`} class={`status-circle status-${serviceResult?.status || 'unknown'}`}></span>
+      <span class="text-sm text-white/70">Status</span>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="space-y-3">
+    <!-- Message -->
+    <div>
+      <span class="text-white/60 text-sm">Message:</span>
+      <div id={`${idPrefix}-message`} class="text-white">
+        {serviceResult?.message || defaultMessage}
+      </div>
+    </div>
+
+    <!-- Response Time -->
+    {responseTime !== undefined ? (
+      <div>
+        <span class="text-white/60 text-sm">Response Time:</span>
+        <div id={`${idPrefix}-latency`} class="text-white font-mono">{responseTime}ms</div>
+      </div>
+    ) : (
+      <div>
+        <span class="text-white/60 text-sm">Response Time:</span>
+        <div id={`${idPrefix}-latency`} class="text-white font-mono">-</div>
+      </div>
+    )}
+
+    <!-- Last Check -->
+    <div>
+      <span class="text-white/60 text-sm">Last Check:</span>
+      <div id={`${idPrefix}-last-updated`} class="text-white/80 text-sm">
+        {serviceResult ? formatTimestamp(new Date(serviceResult.timestamp)) : 'Never'}
+      </div>
+    </div>
+
+    <!-- Service-specific details -->
+    {details.map((detail) => (
+      <div>
+        <span class="text-white/60">{detail.label}:</span>
+        <span class="ml-2 text-white font-mono" data-metric={detail.key}>{detail.value}</span>
+      </div>
+    ))}
+  </div>
+
+  <!-- Error Information -->
+  {serviceResult?.error && (
+    <div class="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded text-sm">
+      <span class="text-red-400 font-medium">Error: </span>
+      <span class="text-white/80">{serviceResult.error}</span>
+    </div>
+  )}
+
+  <!-- Optional Refresh Button -->
+  {showRefreshButton && (
+    <button
+      id={`refresh-${idPrefix}-btn`}
+      class="w-full mt-4 glass-button px-3 py-2 text-white/80 hover:text-white border border-white/20 hover:border-white/40 rounded transition-all duration-200"
+    >
+      Refresh {serviceName}
+    </button>
+  )}
+</div>
+
+<style>
+  .glass-card {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+  }
+
+  .status-circle {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 8px;
+  }
+
+  .status-up { background-color: #10b981; }
+  .status-degraded { background-color: #f59e0b; }
+  .status-down { background-color: #ef4444; }
+  .status-error { background-color: #ef4444; }
+  .status-unknown { background-color: #6b7280; }
+</style>
+
+<script>
+  // =============================================================================
+  // ASTRO MCP BEST PRACTICE: Using data attributes instead of define:vars
+  // No anti-patterns: Proper event-driven architecture with data attributes
+  // =============================================================================
+
+  import { formatTimestamp, onTimezoneChange } from '/src/utils/timezone';
+
+  // ASTRO MCP COMPLIANT: Get data from DOM attributes (not define:vars)
+  document.addEventListener('DOMContentLoaded', () => {
+    const healthCards = document.querySelectorAll('[data-service-name]');
+
+    healthCards.forEach((card) => {
+      const htmlCard = card as HTMLElement;
+      const serviceName = htmlCard.getAttribute('data-service-name');
+      const serviceResult = JSON.parse(htmlCard.getAttribute('data-service-result') || '{}');
+
+      if (!serviceName) return; // Skip if serviceName is null
+
+      const timestampElementId = `last-check-${serviceName.toLowerCase().replace(/\s+/g, '-')}`;
+
+      // Listen for timezone setting changes (following DRY/SOLID)
+      const cleanupTimezoneListener = onTimezoneChange(() => {
+        const timestampElement = document.getElementById(timestampElementId);
+        if (timestampElement && serviceResult.timestamp) {
+          timestampElement.textContent = formatTimestamp(new Date(serviceResult.timestamp));
+        }
+      });
+
+      // Store cleanup function for proper memory management
+      if (htmlCard.dataset.cleanupRegistered !== 'true') {
+        window.addEventListener('beforeunload', cleanupTimezoneListener);
+        htmlCard.dataset.cleanupRegistered = 'true';
+      }
+    });
+  });
+</script>

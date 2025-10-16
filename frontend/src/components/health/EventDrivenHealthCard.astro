@@ -1,0 +1,378 @@
+---
+/**
+ * EventDrivenHealthCard - Astro Implementation
+ * Converted from React to pure Astro following SOLID principles
+ * Uses Astro Islands for client-side nano store integration
+ */
+
+import type { HTMLAttributes } from 'astro/types';
+// Temporarily use any type for serviceData parameters to fix import issues
+
+// Component props interface
+export interface Props extends HTMLAttributes<'div'> {
+  serviceName: 'frontend' | 'backend' | 'database' | 'cache';
+  domPrefix: string; // e.g., 'frontend', 'backend', 'postgres', 'redis'
+  title: string;
+  icon: string;
+  description: string;
+  class?: string;
+}
+
+// Extract props
+const {
+  serviceName,
+  domPrefix,
+  title,
+  icon,
+  description,
+  class: className = '',
+  ...htmlProps
+} = Astro.props;
+
+// Generate unique ID for this card instance
+const cardId = `health-card-${domPrefix}-${Math.random().toString(36).substring(2, 11)}`;
+---
+
+<!-- Health card container with data attributes for Islands script -->
+<div
+  id={cardId}
+  class:list={[
+    'p-4 border rounded-lg bg-white transition-all duration-300',
+    'border-gray-200', // Default, will be updated by script
+    className
+  ]}
+  data-service-name={serviceName}
+  data-dom-prefix={domPrefix}
+  data-card-id={cardId}
+  data-component="health-card"
+  {...htmlProps}
+>
+  <!-- Header with status indicator -->
+  <div class="flex items-center space-x-2 mb-3">
+    <div
+      id={`${domPrefix}-status-indicator`}
+      class="w-3 h-3 rounded-full bg-yellow-400 animate-pulse"
+    ></div>
+    <span class="text-gray-800 text-sm font-medium">
+      {icon} {title}
+    </span>
+    <span
+      id={`${domPrefix}-last-refreshed`}
+      class="text-xs text-gray-500 ml-auto"
+    >
+      Loading...
+    </span>
+  </div>
+
+  <!-- Content area -->
+  <div class="text-sm">
+    <p class="text-gray-600 mb-2">{description}</p>
+    <div class="grid grid-cols-2 gap-2 text-xs">
+      <div>
+        <span class="font-medium">Status:</span>
+        <span
+          id={`${domPrefix}-status-text`}
+          class="ml-1 text-yellow-600"
+        >
+          LOADING
+        </span>
+      </div>
+      <div>
+        <span class="font-medium">Response:</span>
+        <span
+          id={`${domPrefix}-response-time`}
+          class="ml-1"
+        >
+          N/A
+        </span>
+      </div>
+    </div>
+
+    <!-- Service-specific metrics (will be populated by script) -->
+    <div id={`${domPrefix}-metrics-container`} class="mt-2 text-xs">
+      <!-- Dynamic content based on service type -->
+    </div>
+  </div>
+
+  <!-- Status message -->
+  <div
+    id={`${domPrefix}-message`}
+    class="mt-2 text-xs text-gray-500"
+  >
+    Checking {serviceName} status...
+  </div>
+</div>
+
+<!-- Astro Islands script for client-side reactivity -->
+<script>
+  import { $healthData } from '/src/stores/healthStore.js';
+  import { getStatusColor, getStatusBorderClass } from '/src/utils/health-ui-utilities.js';
+  import { formatTimestamp, onTimezoneChange } from '/src/utils/timezone.js';
+  import { createContextLogger } from '/src/utils/logger.js';
+  import type { IConsolidatedHealthData } from '/src/stores/healthStore.js';
+  import type { IServiceResult } from '/src/utils/serviceCheckers.js';
+
+  // Window interface extension for global health card debugging
+  declare global {
+    interface Window {
+      [key: `healthCard_${string}`]: HealthCard;
+    }
+  }
+
+  // Extended metrics interfaces for better type safety
+  interface ServiceMetrics {
+    responseTime?: number;
+    memory?: { used?: string } | string;
+    framework?: { name?: string; version?: string };
+    uptime?: string;
+    cpu?: string;
+    version?: string;
+    connections?: string | number;
+    status?: string;
+    port?: string | number;
+    [key: string]: unknown;
+  }
+
+  // Health card class for managing individual card state - Astro MCP best practice
+  class HealthCard {
+    private cardId: string | undefined;
+    private serviceName: string | undefined;
+    private domPrefix: string | undefined;
+    private card: HTMLElement | null;
+    private isInitialized: boolean;
+    private cleanupTimezoneListener: (() => void) | null;
+    private unsubscribe: (() => void) | undefined;
+    private logger: ReturnType<typeof createContextLogger>;
+
+    constructor() {
+      // Get values from data attributes (Astro MCP best practice)
+      const container = document.querySelector('[data-component="health-card"]') as HTMLElement;
+      this.cardId = container?.dataset.cardId;
+      this.serviceName = container?.dataset.serviceName;
+      this.domPrefix = container?.dataset.domPrefix;
+      this.card = this.cardId ? document.getElementById(this.cardId) : null;
+      this.isInitialized = false;
+      this.cleanupTimezoneListener = null;
+      this.logger = createContextLogger(`EventDrivenHealthCard:${this.serviceName || 'unknown'}`);
+
+      this.init();
+    }
+
+    init() {
+      if (!this.card || this.isInitialized) return;
+
+      // Subscribe to nano store changes
+      this.unsubscribe = $healthData.subscribe((healthData) => {
+        this.updateCard(healthData);
+      });
+
+      // Listen for timezone changes
+      this.cleanupTimezoneListener = onTimezoneChange(() => {
+        const healthData = $healthData.get();
+        this.updateTimestamp(healthData);
+      });
+
+      this.isInitialized = true;
+      this.logger.info('Initialized with nano store reactivity');
+    }
+
+    updateCard(healthData: IConsolidatedHealthData) {
+      if (!healthData || !this.card) return;
+
+      if (!this.serviceName) return;
+      const serviceData = healthData.services[this.serviceName as keyof typeof healthData.services];
+      if (!serviceData) return;
+
+      this.logger.info('Updating with data', { serviceData });
+
+      // Update main card border and background
+      this.updateCardAppearance(serviceData);
+
+      // Update status indicator
+      this.updateStatusIndicator(serviceData);
+
+      // Update status text
+      this.updateStatusText(serviceData);
+
+      // Update timestamp
+      this.updateTimestamp(healthData, serviceData);
+
+      // Update response time
+      this.updateResponseTime(serviceData);
+
+      // Update service-specific metrics
+      this.updateServiceMetrics(serviceData);
+
+      // Update message
+      this.updateMessage(serviceData);
+    }
+
+    updateCardAppearance(serviceData: IServiceResult) {
+      const borderClass = getStatusBorderClass(serviceData.status);
+      if (this.card) {
+        this.card.className = this.card.className
+          .replace(/border-\w+-\d+/g, '')
+          .replace(/bg-\w+-\d+/g, '') +
+          ` ${borderClass} bg-white`;
+      }
+    }
+
+    updateStatusIndicator(serviceData: IServiceResult) {
+      const indicator = document.getElementById(`${this.domPrefix}-status-indicator`);
+      if (indicator) {
+        const statusClass = getStatusColor(serviceData.status);
+        indicator.className = `w-3 h-3 rounded-full ${statusClass}`;
+      }
+    }
+
+    updateStatusText(serviceData: IServiceResult) {
+      const statusText = document.getElementById(`${this.domPrefix}-status-text`);
+      if (statusText) {
+        statusText.textContent = serviceData.status.toUpperCase();
+        statusText.className = `ml-1 ${serviceData.status === 'up' ? 'text-green-600' : 'text-red-600'}`;
+      }
+    }
+
+    updateTimestamp(healthData: IConsolidatedHealthData, serviceData: IServiceResult | null = null) {
+      const lastRefreshedElement = document.getElementById(`${this.domPrefix}-last-refreshed`);
+      if (lastRefreshedElement) {
+        const data = serviceData || (this.serviceName ? healthData.services[this.serviceName as keyof typeof healthData.services] : null);
+        const timestamp = data?.timestamp || new Date(healthData.metadata.timestamp);
+        lastRefreshedElement.textContent = formatTimestamp(timestamp);
+      }
+    }
+
+    updateResponseTime(serviceData: IServiceResult) {
+      const responseTimeElement = document.getElementById(`${this.domPrefix}-response-time`);
+      if (responseTimeElement) {
+        const responseTime = serviceData.metrics?.responseTime;
+        responseTimeElement.textContent = responseTime ?
+          `${responseTime}${typeof responseTime === 'number' ? 'ms' : ''}` :
+          'N/A';
+      }
+    }
+
+    updateServiceMetrics(serviceData: IServiceResult) {
+      const metricsContainer = document.getElementById(`${this.domPrefix}-metrics-container`);
+      if (!metricsContainer || !serviceData.metrics) return;
+
+      let metricsHTML = '';
+      const metrics = serviceData.metrics as ServiceMetrics;
+
+      switch (this.serviceName) {
+        case 'frontend':
+          metricsHTML = `
+            <div class="grid grid-cols-2 gap-1">
+              <div><span class="font-medium">Memory:</span> ${typeof metrics.memory === 'object' && metrics.memory?.used ? metrics.memory.used : metrics.memory || 'N/A'}</div>
+              <div><span class="font-medium">Port:</span> ${metrics.port || window.location.port || '3000'}</div>
+              <div><span class="font-medium">Framework:</span> ${metrics.framework?.name || 'React/Astro'}</div>
+              <div><span class="font-medium">Version:</span> ${metrics.framework?.version || 'N/A'}</div>
+            </div>
+          `;
+          break;
+
+        case 'backend':
+          metricsHTML = `
+            <div class="grid grid-cols-2 gap-1">
+              <div><span class="font-medium">Uptime:</span> ${metrics.uptime || 'N/A'}</div>
+              <div><span class="font-medium">Memory:</span> ${metrics.memory || 'N/A'}</div>
+              <div><span class="font-medium">CPU:</span> ${metrics.cpu || 'N/A'}</div>
+              <div><span class="font-medium">Version:</span> ${metrics.version || 'N/A'}</div>
+            </div>
+          `;
+          break;
+
+        case 'database':
+          metricsHTML = `
+            <div class="grid grid-cols-2 gap-1">
+              <div><span class="font-medium">Connections:</span> ${metrics.connections || 'N/A'}</div>
+              <div><span class="font-medium">Version:</span> ${metrics.version || 'PostgreSQL'}</div>
+              <div><span class="font-medium">Status:</span> ${metrics.status || 'Connected'}</div>
+            </div>
+          `;
+          break;
+
+        case 'cache':
+          metricsHTML = `
+            <div class="grid grid-cols-2 gap-1">
+              <div><span class="font-medium">Memory:</span> ${metrics.memory || 'N/A'}</div>
+              <div><span class="font-medium">Version:</span> ${metrics.version || 'Redis'}</div>
+              <div><span class="font-medium">Connections:</span> ${metrics.connections || 'N/A'}</div>
+            </div>
+          `;
+          break;
+      }
+
+      metricsContainer.innerHTML = metricsHTML;
+    }
+
+    updateMessage(serviceData: IServiceResult): void {
+      const messageElement = document.getElementById(`${this.domPrefix}-message`);
+      if (messageElement) {
+        messageElement.textContent = serviceData.message || `${this.serviceName} status updated`;
+      }
+    }
+
+    destroy() {
+      if (this.unsubscribe) {
+        this.unsubscribe();
+      }
+      if (this.cleanupTimezoneListener) {
+        this.cleanupTimezoneListener();
+      }
+      this.isInitialized = false;
+      this.logger.info('Cleaned up');
+    }
+  }
+
+  // Initialize the health card
+  const healthCard = new HealthCard();
+
+  // Cleanup on page unload
+  window.addEventListener('beforeunload', () => {
+    healthCard.destroy();
+  });
+
+  // Expose for debugging
+  if (typeof window !== 'undefined') {
+    const container = document.querySelector('[data-component="health-card"]') as HTMLElement;
+    const domPrefix = container?.dataset.domPrefix;
+    if (domPrefix) {
+      window[`healthCard_${domPrefix}` as `healthCard_${string}`] = healthCard;
+    }
+  }
+</script>
+
+<style>
+  /* Loading animation for status indicator */
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+  .animate-pulse {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  /* Smooth transitions for status changes */
+  [data-component="health-card"] {
+    transition: border-color 0.3s ease, background-color 0.3s ease;
+  }
+
+  /* Status indicator transitions */
+  [id$="-status-indicator"] {
+    transition: background-color 0.3s ease;
+  }
+
+  /* Responsive grid adjustments */
+  @media (max-width: 640px) {
+    .grid-cols-2 {
+      grid-template-columns: 1fr;
+      gap: 0.25rem;
+    }
+  }
+</style>

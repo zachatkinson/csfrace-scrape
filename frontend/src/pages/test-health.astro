@@ -1,0 +1,215 @@
+---
+// Comprehensive System Health Dashboard
+// HYBRID MODE: Static generation for health test page (public)
+export const prerender = true;
+
+import MainLayout from '../components/layout/MainLayout.astro';
+import BaseHealthCard from '../components/health/BaseHealthCard.astro';
+---
+
+<MainLayout title="System Health Dashboard" description="Comprehensive monitoring and diagnostics for all system services">
+
+  <!-- Health Dashboard Styles -->
+  <style>
+    .glass-card {
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+    }
+
+    .status-circle {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 8px;
+    }
+
+    .status-up { background-color: #10b981; }
+    .status-degraded { background-color: #f59e0b; }
+    .status-down { background-color: #ef4444; }
+    .status-error { background-color: #ef4444; }
+  </style>
+
+  <!-- Main Dashboard Container -->
+  <div class="container mx-auto px-4 py-8 space-y-8">
+
+    <!-- Dashboard Header -->
+    <div class="glass-card p-6">
+      <div class="mb-4">
+        <h1 class="text-3xl font-bold text-white mb-2">System Health Dashboard</h1>
+        <p class="text-white/70">Real-time monitoring and diagnostics for all system services</p>
+      </div>
+
+      <!-- Overall Status -->
+      <div class="space-y-3">
+        <div class="flex items-center gap-4 p-4 bg-black/20 rounded-lg">
+          <div class="flex items-center">
+            <span id="overall-status" class="status-circle status-up"></span>
+            <span class="text-white font-medium">Overall Status</span>
+          </div>
+          <span id="overall-message" class="text-white/80">Loading...</span>
+          <span id="overall-last-updated" class="text-white/60 text-sm ml-auto">Never</span>
+        </div>
+
+        <!-- CORS Status -->
+        <div class="flex items-center gap-4 p-3 bg-black/20 rounded-lg">
+          <div class="flex items-center">
+            <span id="cors-status" class="status-circle status-up"></span>
+            <span class="text-white/90 font-medium">CORS Configuration</span>
+          </div>
+          <span id="cors-message" class="text-white/70">Checking...</span>
+          <span id="cors-last-checked" class="text-white/50 text-sm ml-auto">Never</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Service Status Cards - 4 Card Layout -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <BaseHealthCard
+        serviceName="Frontend"
+        customIdPrefix="frontend"
+        defaultMessage="Frontend Active"
+        showRefreshButton={false}
+      />
+
+      <BaseHealthCard
+        serviceName="Backend"
+        customIdPrefix="backend"
+        defaultMessage="Loading..."
+        showRefreshButton={false}
+      />
+
+      <BaseHealthCard
+        serviceName="PostgreSQL"
+        customIdPrefix="postgresql"
+        defaultMessage="Via Backend Health Check"
+        showRefreshButton={false}
+      />
+
+      <BaseHealthCard
+        serviceName="Redis"
+        customIdPrefix="redis"
+        defaultMessage="Via Backend Health Check"
+        showRefreshButton={false}
+      />
+    </div>
+
+    <!-- System Performance Overview -->
+    <div class="glass-card p-6">
+      <h3 class="text-xl font-semibold text-white mb-4">System Performance Overview</h3>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+        <!-- Memory Usage -->
+        <div class="bg-black/20 p-4 rounded-lg">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-white/60 text-sm">Memory Usage</span>
+            <span id="memory-usage" class="text-white font-bold">--%</span>
+          </div>
+          <div class="w-full bg-gray-700 rounded-full h-2">
+            <div id="memory-progress" class="bg-green-600 h-2 rounded-full" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <!-- Disk Usage -->
+        <div class="bg-black/20 p-4 rounded-lg">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-white/60 text-sm">Disk Usage</span>
+            <span id="disk-usage" class="text-white font-bold">--%</span>
+          </div>
+          <div class="w-full bg-gray-700 rounded-full h-2">
+            <div id="disk-progress" class="bg-yellow-600 h-2 rounded-full" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <!-- Network I/O -->
+        <div class="bg-black/20 p-4 rounded-lg">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-white/60 text-sm">Network I/O</span>
+            <span id="network-io" class="text-white font-bold">-- KB/s</span>
+          </div>
+          <div class="w-full bg-gray-700 rounded-full h-2">
+            <div id="network-progress" class="bg-purple-600 h-2 rounded-full" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Performance Metrics -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div>
+          <h4 class="text-lg font-medium text-white mb-3">Response Times</h4>
+          <div class="space-y-2">
+            <div class="flex justify-between">
+              <span class="text-white/60">Average Response:</span>
+              <span id="avg-response" class="text-white font-mono">-- ms</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-white/60">P95 Response:</span>
+              <span id="p95-response" class="text-white font-mono">-- ms</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-white/60">Max Response:</span>
+              <span id="max-response" class="text-white font-mono">-- ms</span>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h4 class="text-lg font-medium text-white mb-3">System Load</h4>
+          <div class="space-y-2">
+            <div class="flex justify-between">
+              <span class="text-white/60">Active Connections:</span>
+              <span id="active-connections" class="text-white font-mono">--</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-white/60">Queue Length:</span>
+              <span id="queue-length" class="text-white font-mono">--</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-white/60">Uptime:</span>
+              <span id="system-uptime" class="text-white font-mono">--</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Raw Data Export -->
+    <div class="glass-card p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-xl font-semibold text-white">Raw Data Export</h3>
+        <div class="flex gap-2">
+          <button id="export-json-btn" class="glass-button px-4 py-2 text-white/80 hover:text-white border border-white/20 hover:border-white/40 rounded transition-all duration-200">
+            Export JSON
+          </button>
+          <button id="export-csv-btn" class="glass-button px-4 py-2 text-white/80 hover:text-white border border-white/20 hover:border-white/40 rounded transition-all duration-200">
+            Export CSV
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div>
+          <h4 class="text-lg font-medium text-white mb-3">Health Data Preview</h4>
+          <div class="bg-black/40 p-4 rounded-lg h-64 overflow-auto">
+            <pre id="raw-health-data" class="text-green-400 text-xs font-mono whitespace-pre-wrap">Loading health data...</pre>
+          </div>
+        </div>
+
+        <div>
+          <h4 class="text-lg font-medium text-white mb-3">Performance Metrics Preview</h4>
+          <div class="bg-black/40 p-4 rounded-lg h-64 overflow-auto">
+            <pre id="raw-performance-data" class="text-blue-400 text-xs font-mono whitespace-pre-wrap">Loading performance data...</pre>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</MainLayout>
+
+
+
+<!-- DRY/SOLID/Astro MCP Implementation - External TypeScript File -->
+<script type="module" src="/src/scripts/health-dashboard-init.ts" is:inline></script>

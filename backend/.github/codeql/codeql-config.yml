@@ -1,0 +1,64 @@
+name: "CodeQL Security Analysis Configuration"
+disable-default-queries: false
+
+# Additional security queries following DRY principle - centralized configuration
+queries:
+  # Use standard security query packs (valid specifiers)
+  - uses: security-extended
+  - uses: security-and-quality
+
+# Path filters - SOLID Single Responsibility for configuration
+paths:
+  # Include paths for analysis
+  - "src/"
+  - "tests/"
+  
+# Exclude paths to reduce noise - DRY principle for common exclusions
+paths-ignore:
+  - "**/node_modules"
+  - "**/vendor"
+  - "**/__pycache__"
+  - "**/*.pyc"
+  - "**/venv"
+  - "**/env"
+  - "**/.git"
+  - "**/build"
+  - "**/dist"
+  - "**/coverage"
+  - "**/.coverage"
+  - "**/htmlcov"
+  - "**/*.log"
+  - "**/logs/"
+  - "**/temp/"
+  - "**/tmp/"
+
+# Query filters - Focus on high-severity security issues
+query-filters:
+  # Exclude low-severity issues to focus on critical security findings
+  - exclude:
+      id: py/unused-import
+      severity: note
+  - exclude:
+      id: py/unreachable-statement
+      severity: warning
+  
+  # Include all high and critical security findings
+  - include:
+      kind: problem
+      severity: error
+  - include:
+      kind: problem
+      severity: warning
+      tags: security
+
+
+# Python-specific configuration for better package resolution
+packs:
+  # Python security analysis pack
+  python:
+    - codeql/python-queries
+
+# Build configuration for Python projects
+build-mode: none  # Use automatic build detection
+
+# Simplified configuration for reliable CI execution

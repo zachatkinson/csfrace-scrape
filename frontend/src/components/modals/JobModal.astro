@@ -1,0 +1,133 @@
+---
+/**
+ * JobModal - DRY/SOLID Component Implementation
+ * Single Responsibility: Render job detail modal with proper accessibility
+ * Following DRY principle by using BaseModal foundation
+ * Open/Closed: Extends BaseModal behavior without modification
+ */
+
+// =============================================================================
+// IMPORTS & TYPES
+// =============================================================================
+import type { IJobModalProps } from '../dashboard/types/dashboard.types';
+import { DASHBOARD_CSS_CLASSES } from '../dashboard/types/dashboard.types';
+import BaseModal from '../common/BaseModal.astro';
+
+// =============================================================================
+// COMPONENT PROPS
+// =============================================================================
+export interface Props extends IJobModalProps {}
+
+const {
+  isOpen = false,
+  jobId
+} = Astro.props;
+---
+
+<!-- =============================================================================
+     JOB DETAIL MODAL - DRY Implementation using BaseModal
+     Single Responsibility: Job-specific content only
+     ============================================================================= -->
+
+<BaseModal
+  id="job-modal"
+  closeButtonId="job-modal-close"
+  maxWidth="max-w-4xl"
+  backdropBlur={true}
+  className={isOpen ? '' : 'hidden'}
+>
+  <div
+    class="glass-card p-6"
+    data-component="job-modal"
+    data-modal-open={isOpen}
+    data-job-id={jobId}
+    role="main"
+    aria-labelledby="modal-title"
+    aria-describedby="modal-description"
+  >
+
+    <!-- =============================================================
+         MODAL HEADER (Single Responsibility)
+         ============================================================= -->
+    <div class="flex items-center justify-between mb-6">
+      <h2
+        id="modal-title"
+        class="text-2xl font-bold text-white"
+      >
+        Job Details
+      </h2>
+    </div>
+
+    <!-- =============================================================
+         MODAL CONTENT (Single Responsibility)
+         ============================================================= -->
+    <div
+      id="job-details-content"
+      data-job-content
+      aria-live="polite"
+      aria-busy="false"
+    >
+      <!-- Job details will be populated by Astro script + nano stores -->
+      <div class="text-center py-8" data-loading-placeholder>
+        <div class={DASHBOARD_CSS_CLASSES.LOADING_SPINNER + " mx-auto mb-4"}></div>
+        <p class="text-white/70">Loading job details...</p>
+      </div>
+    </div>
+  </div>
+</BaseModal>
+
+<!-- =============================================================================
+     MODAL SCRIPT - DRY Implementation using BaseModalManager
+     Following SOLID principles with base modal behavior
+     ============================================================================= -->
+<script>
+  import { BaseModalManager } from '/src/scripts/baseModalManager';
+  import { createContextLogger } from '../../utils/logger';
+
+  const logger = createContextLogger('JobModal');
+
+  // Job Modal Manager extending base functionality
+  class JobModalManager extends BaseModalManager {
+    constructor() {
+      super({
+        modalId: 'job-modal',
+        closeOnEscape: true,
+        closeOnBackdrop: true,
+        onOpen: () => {
+          this.loadJobDetails();
+        }
+      });
+    }
+
+    // Job-specific initialization - required by BaseModalManager
+    protected setupModalSpecificHandlers(): void {
+      // Job-specific setup can be done here
+      logger.debug('Setting up job-specific handlers');
+    }
+
+    // Load job details from nano store
+    private async loadJobDetails(): Promise<void> {
+      const modal = this.modalElement;
+      const jobId = modal?.dataset.jobId;
+      if (!jobId) return;
+
+      const contentEl = document.getElementById('job-details-content');
+      if (!contentEl) return;
+
+      try {
+        // Job details will be loaded from nano store
+        // This will be implemented when we add SSE + nano stores
+        logger.info('Loading job details', { jobId });
+      } catch (error) {
+        logger.error('Failed to load job details', { error, jobId });
+      }
+    }
+  }
+
+  // Initialize job modal manager
+  const jobModalManager = new JobModalManager();
+  jobModalManager.init();
+
+  // Expose for external access - properly typed
+  (window as Window & { jobModalManager?: JobModalManager }).jobModalManager = jobModalManager;
+</script>

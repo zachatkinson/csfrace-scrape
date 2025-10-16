@@ -1,0 +1,72 @@
+---
+/**
+ * Dynamic Greeting Component - Following Astro Best Practices
+ * Server-side rendered component with client-side enhancement
+ * Uses script tag for time-based content updates
+ * Replaces simple h2 with proper component architecture
+ */
+
+// Props for customization
+interface Props {
+  class?: string;
+  id?: string;
+}
+
+const { class: className = "text-2xl font-semibold text-white mb-6", id = "greeting" } = Astro.props;
+---
+
+<!-- Server-side rendered with default greeting -->
+<h2 id={id} class={className}>
+  What are we working on today?
+</h2>
+
+<script>
+  // Import centralized services following DRY principles
+  import GreetingService from '../services/GreetingService';
+  import { uiLogger } from '../utils/logger';
+
+  // Single instance of GreetingService (Singleton pattern)
+  const greetingService = new GreetingService();
+
+  /**
+   * Update greeting using centralized service (Single Responsibility)
+   */
+  function updateGreeting(): void {
+    try {
+      // Get greeting from centralized service
+      const greeting = greetingService.getCurrentGreeting();
+
+      // Update DOM element
+      const greetingElement = document.getElementById('greeting');
+      if (greetingElement) {
+        greetingElement.textContent = greeting;
+
+        // Add a subtle animation for the update
+        greetingElement.style.opacity = '0.7';
+        setTimeout(() => {
+          greetingElement.style.opacity = '1';
+        }, 150);
+
+        // Log using centralized logger (replaces console.log)
+        uiLogger.info('Dynamic greeting updated', {
+          greeting: greeting.substring(0, 50) + '...',
+          timestamp: new Date().toISOString()
+        });
+      }
+    } catch (error) {
+      uiLogger.error('Failed to update greeting', error as Error);
+
+      // Fallback greeting on error
+      const greetingElement = document.getElementById('greeting');
+      if (greetingElement) {
+        greetingElement.textContent = 'Ready to convert something amazing today?';
+      }
+    }
+  }
+
+  // Initialize greeting when the script loads
+  updateGreeting();
+
+  // Optional: Update greeting every hour for long-running sessions
+  setInterval(updateGreeting, 60 * 60 * 1000); // Every hour
+</script>

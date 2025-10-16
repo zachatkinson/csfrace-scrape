@@ -1,0 +1,173 @@
+---
+/**
+ * OAuth Callback Handler
+ * Handles OAuth provider redirects and exchanges authorization codes for tokens
+ */
+
+// HYBRID MODE: Server-side rendering needed for OAuth token exchange
+export const prerender = false;
+
+import MainLayout from '../../components/layout/MainLayout.astro';
+
+const title = 'Authentication - CSFrace';
+const description = 'Completing authentication...';
+---
+
+<MainLayout title={title} description={description}>
+  <main class="min-h-screen flex items-center justify-center">
+    <div class="text-center p-8 glass-card max-w-md w-full mx-4">
+      <!-- Loading spinner -->
+      <div class="animate-spin rounded-full h-16 w-16 border-b-2 border-white mx-auto mb-6"></div>
+      
+      <!-- Status message -->
+      <h1 class="text-2xl font-bold text-white mb-4">Completing Authentication</h1>
+      <p class="text-white/70 mb-8">Please wait while we securely log you in...</p>
+      
+      <!-- Success display -->
+      <div id="success-display" class="hidden mt-6 p-4 glass-card bg-green-500/10 border-green-500/30 text-green-100 text-sm">
+        <div class="flex items-start space-x-3">
+          <svg class="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div>
+            <p id="success-message" class="font-medium"></p>
+            <p class="mt-1 text-green-200">Redirecting you now...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Error display -->
+      <div id="error-display" class="hidden mt-6 p-4 glass-card bg-red-500/10 border-red-500/30 text-red-100 text-sm">
+        <div class="flex items-start space-x-3">
+          <svg class="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div>
+            <p class="font-medium">Authentication Failed</p>
+            <p id="error-message" class="mt-1"></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script is:inline>
+    // Handle OAuth callback on page load
+    (async () => {
+      try {
+        // Get API base URL from window or use default
+        const apiBaseUrl = window.CSFRACE_API_BASE_URL || 'http://localhost';
+
+        // Get URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const code = urlParams.get('code');
+        const state = urlParams.get('state');
+        const error = urlParams.get('error');
+
+        // Check for OAuth error
+        if (error) {
+          throw new Error(`OAuth error: ${error}. ${urlParams.get('error_description') || ''}`);
+        }
+
+        // Check for authorization code
+        if (!code) {
+          throw new Error('No authorization code received from OAuth provider');
+        }
+
+        // Extract provider from state or URL
+        const provider = urlParams.get('provider') ||
+                        sessionStorage.getItem('oauth_provider') ||
+                        'google';  // Default to google since it's the first one we're implementing
+
+        // Exchange code for tokens with backend using GET with query parameters
+        const params = new URLSearchParams({
+          code: code,
+          state: state
+        });
+        const response = await fetch(`${apiBaseUrl}/auth/oauth/${provider}/callback?${params}`, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+          },
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Authentication failed');
+        }
+        
+        const tokens = await response.json();
+        
+        // Get user profile
+        const userResponse = await fetch(`${apiBaseUrl}/auth/me`, {
+          headers: {
+            'Authorization': `Bearer ${tokens.access_token}`,
+          },
+        });
+        
+        if (!userResponse.ok) {
+          throw new Error('Failed to get user profile');
+        }
+        
+        const user = await userResponse.json();
+
+        // Note: Tokens are now stored in httpOnly cookies by the backend
+        // Only store non-sensitive user data for UI purposes
+        localStorage.setItem('user_data', JSON.stringify(user));
+        
+        // Clean up OAuth state
+        sessionStorage.removeItem('oauth_provider');
+        
+        // Dispatch success event for AuthContext
+        window.dispatchEvent(new CustomEvent('authSuccess', {
+          detail: { user, tokens }
+        }));
+        
+        // Hide loading spinner and show success message
+        const loadingSpinner = document.querySelector('.animate-spin');
+        const loadingText = document.querySelector('h1');
+        const loadingSubtext = document.querySelector('p');
+        const successDisplay = document.getElementById('success-display');
+        const successMessage = document.getElementById('success-message');
+        
+        if (loadingSpinner) loadingSpinner.style.display = 'none';
+        if (loadingText) loadingText.style.display = 'none';
+        if (loadingSubtext) loadingSubtext.style.display = 'none';
+        
+        // Determine if this is a new user or existing user login
+        // Check if user was just created (you can customize this logic based on your backend response)
+        const isNewUser = tokens.is_new_user || false; // Assuming backend sends this flag
+
+        // Debug logging to troubleshoot message display (production: use console.warn for debugging)
+        // OAuth callback debug: tokens, is_new_user_field, isNewUser, tokenKeys
+
+        if (successDisplay && successMessage) {
+          successMessage.textContent = isNewUser ? 'User Created Successfully!' : 'Login Successful!';
+          successDisplay.classList.remove('hidden');
+        }
+        
+        // Redirect to home page after 2 seconds
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 2000);
+        
+      } catch (error) {
+        console.error('OAuth callback error:', error);
+        
+        // Show error message
+        const errorDisplay = document.getElementById('error-display');
+        const errorMessage = document.getElementById('error-message');
+        
+        if (errorDisplay && errorMessage) {
+          errorMessage.textContent = error.message || 'An unexpected error occurred';
+          errorDisplay.classList.remove('hidden');
+        }
+        
+        // Redirect to home after 5 seconds
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 5000);
+      }
+    })();
+  </script>
+</MainLayout>

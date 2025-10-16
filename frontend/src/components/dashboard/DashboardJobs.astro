@@ -1,0 +1,75 @@
+---
+/**
+ * DashboardJobs - Client Island Implementation (SECURE)
+ * Following Astro MCP best practices with client:load for authenticated data
+ * NO server-side cookie forwarding - uses browser authentication
+ */
+
+// =============================================================================
+// IMPORTS & TYPES (TypeScript strict mode)
+// =============================================================================
+import DashboardManager from './DashboardManager.tsx';
+
+// No server-side data fetching - all authentication happens in browser
+// This follows OWASP security best practices and avoids:
+// - SSRF vulnerabilities from manual cookie forwarding
+// - Cookie leakage in server logs
+// - HttpOnly cookie protection violations
+---
+
+<!-- =============================================================================
+     CLIENT ISLAND - Authenticated Data Fetching (SECURE PATTERN)
+     Uses client:load to hydrate React component with browser cookies
+     ============================================================================= -->
+
+<div class="dashboard-jobs-wrapper">
+  <!--
+    ✅ SECURE: Client-side hydration with browser authentication
+    ✅ SOLID: Single Responsibility - DashboardManager handles all job logic
+    ✅ DRY: Reuses existing DashboardManager component
+
+    React component hydrates in browser with httpOnly cookies
+    All API calls use credentials: "include" for secure authentication
+  -->
+  <DashboardManager
+    client:load
+    autoRefresh={true}
+    refreshInterval={10000}
+  />
+</div>
+
+<!-- =============================================================================
+     STYLES (Client Island Wrapper)
+     ============================================================================= -->
+<style>
+  .dashboard-jobs-wrapper {
+    min-height: 400px;
+    position: relative;
+  }
+
+  /* Loading skeleton shown while React hydrates */
+  .dashboard-jobs-wrapper:empty::before {
+    content: '';
+    display: block;
+    width: 100%;
+    height: 400px;
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.05) 25%,
+      rgba(255, 255, 255, 0.1) 50%,
+      rgba(255, 255, 255, 0.05) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 8px;
+  }
+
+  @keyframes shimmer {
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
+  }
+</style>
