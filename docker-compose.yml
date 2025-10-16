@@ -64,8 +64,8 @@ services:
       - OAUTH_FACEBOOK_CLIENT_SECRET=${OAUTH_FACEBOOK_CLIENT_SECRET:-your-facebook-app-secret}
       - OAUTH_APPLE_CLIENT_ID=${OAUTH_APPLE_CLIENT_ID:-your-apple-service-id}
       - OAUTH_APPLE_CLIENT_SECRET=${OAUTH_APPLE_CLIENT_SECRET:-your-apple-client-secret}
-      - OAUTH_REDIRECT_URI_BASE=${OAUTH_REDIRECT_URI_BASE:-http://localhost:8000}
-      - FORCE_SECURE_COOKIES=${FORCE_SECURE_COOKIES:-false}
+      - OAUTH_REDIRECT_URI_BASE=${OAUTH_REDIRECT_URI_BASE:-https://localhost}
+      - FORCE_SECURE_COOKIES=${FORCE_SECURE_COOKIES:-true}  # Required for HTTPS in development
 
       # Auth Token Configuration
       - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-720}
@@ -73,7 +73,7 @@ services:
       # WebAuthn Configuration
       - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID:-localhost}
       - WEBAUTHN_RP_NAME=${WEBAUTHN_RP_NAME:-CSFrace Backend}
-      - WEBAUTHN_ORIGIN=${WEBAUTHN_ORIGIN:-http://localhost:8000}
+      - WEBAUTHN_ORIGIN=${WEBAUTHN_ORIGIN:-https://localhost}
     depends_on:
       postgres:
         condition: service_healthy
