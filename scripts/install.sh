@@ -19,10 +19,10 @@ if [ $EXISTING_VOLUMES -gt 0 ]; then
     else
         echo "ℹ️  Existing data found from previous installation"
         echo ""
-        read -p "Do you want to start FRESH (delete existing data)? (yes/no): " -r
+        read -p "Start FRESH (delete existing data)? [y/N]: " -r
         echo ""
 
-        if [[ $REPLY =~ ^[Yy]es$ ]]; then
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
             echo "🗑️  Removing existing data volumes..."
             docker compose down -v 2>/dev/null || true
             echo "✓ Starting with fresh database"

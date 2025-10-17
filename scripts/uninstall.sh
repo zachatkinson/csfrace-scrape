@@ -19,22 +19,22 @@ if [ "$SKIP_PROMPTS" = "1" ]; then
     echo "ℹ️  Data will be preserved (non-interactive mode)"
     echo ""
 else
-    read -p "Do you want to DELETE all data (database, metrics, etc.)? (yes/no): " -r
+    read -p "DELETE all data (database, metrics, etc.)? [y/N]: " -r
     echo ""
 
     DELETE_DATA=$REPLY
 
-    if [[ $DELETE_DATA =~ ^[Yy]es$ ]]; then
+    if [[ $DELETE_DATA =~ ^[Yy]$ ]]; then
         echo "⚠️  WARNING: This will permanently delete:"
         echo "   - All database data"
         echo "   - Redis cache"
         echo "   - Grafana dashboards and settings"
         echo "   - Prometheus metrics history"
         echo ""
-        read -p "Are you ABSOLUTELY SURE? (yes/no): " -r
+        read -p "Are you ABSOLUTELY SURE? [y/N]: " -r
         echo ""
 
-        if [[ ! $REPLY =~ ^[Yy]es$ ]]; then
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
             DELETE_DATA="no"
             echo "✓ Data will be preserved"
         fi
@@ -74,10 +74,10 @@ if [ -d "output" ]; then
         echo "ℹ️  Output files preserved (non-interactive mode)"
     else
         echo ""
-        read -p "Do you want to DELETE output files (scraped content)? (yes/no): " -r
+        read -p "DELETE output files (scraped content)? [y/N]: " -r
         echo ""
 
-        if [[ $REPLY =~ ^[Yy]es$ ]]; then
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
             echo "🗑️  Removing output files..."
             rm -rf output
             echo "   ✓ Output files removed"

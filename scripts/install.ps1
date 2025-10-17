@@ -18,10 +18,10 @@ if ($existingVolumes -gt 0) {
     } else {
         Write-Host "ℹ️  Existing data found from previous installation" -ForegroundColor Cyan
         Write-Host ""
-        $startFresh = Read-Host "Do you want to start FRESH (delete existing data)? (yes/no)"
+        $startFresh = Read-Host "Start FRESH (delete existing data)? [y/N]"
         Write-Host ""
 
-        if ($startFresh -eq "yes") {
+        if ($startFresh -match "^[Yy]$") {
             Write-Host "🗑️  Removing existing data volumes..." -ForegroundColor Yellow
             try {
                 docker compose down -v 2>$null
