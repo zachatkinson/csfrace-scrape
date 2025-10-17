@@ -168,10 +168,10 @@ docker compose ps
 # Test backend API via HTTPS (recommended)
 Invoke-RestMethod -Uri https://localhost/health -SkipCertificateCheck
 
-# Or via HTTP
+# Or via HTTP (direct backend access)
 Invoke-RestMethod -Uri http://localhost:8000/health/
 
-# Open frontend in browser
+# Open frontend in browser (via nginx)
 start https://localhost
 ```
 
@@ -182,10 +182,11 @@ Once installed, access the application at:
 | Service | URL | Description |
 |---------|-----|-------------|
 | **Frontend (HTTPS)** | https://localhost | Main web interface (recommended) |
-| **Frontend (HTTP)** | http://localhost:3000 | Alternative HTTP access |
+| **Frontend (HTTP)** | http://localhost:3000 | Direct access without nginx |
 | **Backend API (HTTPS)** | https://localhost/api | REST API via nginx (recommended) |
-| **Backend API (HTTP)** | http://localhost:8000 | Direct backend access |
-| **API Documentation** | http://localhost:8000/docs | Interactive API docs (Swagger) |
+| **Backend API (HTTP)** | http://localhost:8000 | Direct backend access without nginx |
+| **API Documentation (HTTPS)** | https://localhost/docs | Interactive API docs via nginx (recommended) |
+| **API Documentation (HTTP)** | http://localhost:8000/docs | Direct access without nginx |
 | **Prometheus** | http://localhost:9090 | Metrics monitoring |
 | **Grafana** | http://localhost:3001 | Analytics dashboards (admin/admin) |
 
@@ -510,8 +511,8 @@ Remove-Item -Recurse -Force csfrace-scrape
 After successful installation:
 
 1. **Configure OAuth** (optional): See [SETUP_APPLE_OAUTH.md](SETUP_APPLE_OAUTH.md)
-2. **Review API**: Browse http://localhost:8000/docs
-3. **Explore Frontend**: Open http://localhost:3000
+2. **Review API**: Browse https://localhost/docs
+3. **Explore Frontend**: Open https://localhost
 4. **Monitor Performance**: Check Grafana at http://localhost:3001
 
 ---
