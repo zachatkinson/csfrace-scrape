@@ -105,10 +105,12 @@ Write-Host ""
 Write-Host "✅ Installation complete!" -ForegroundColor Green
 Write-Host ""
 Write-Host "📍 Service URLs:" -ForegroundColor Cyan
-Write-Host "   Frontend:    http://localhost:3000"
-Write-Host "   Backend API: http://localhost:8000"
-Write-Host "   API Docs:    http://localhost:8000/docs"
+Write-Host "   Frontend:    https://localhost"
+Write-Host "   Backend API: https://localhost/api"
+Write-Host "   API Docs:    https://localhost/docs"
 Write-Host "   Grafana:     http://localhost:3001 (admin/admin)"
 Write-Host "   Prometheus:  http://localhost:9090"
+Write-Host ""
+Write-Host "💡 Note: HTTPS requires SSL certificates. Run .\create-https-cert.ps1 to generate them." -ForegroundColor Yellow
 Write-Host ""
 Write-Host "🎉 Ready to use!" -ForegroundColor Green
