@@ -1,11 +1,40 @@
 # Simple one-command installation script for Windows
 # Usage: .\scripts\install.ps1
+# Non-interactive mode: $env:SKIP_PROMPTS="1"; .\scripts\install.ps1
 
 $ErrorActionPreference = "Stop"
 
 Write-Host "🚀 CSFrace Scrape - Installation" -ForegroundColor Cyan
 Write-Host "=================================" -ForegroundColor Cyan
 Write-Host ""
+
+# Check for existing data volumes
+$existingVolumes = (docker volume ls --filter "name=csfrace-scrape" --format "{{.Name}}" | Measure-Object -Line).Lines
+
+if ($existingVolumes -gt 0) {
+    if ($env:SKIP_PROMPTS -eq "1") {
+        Write-Host "ℹ️  Existing data found - preserving (non-interactive mode)" -ForegroundColor Cyan
+        Write-Host ""
+    } else {
+        Write-Host "ℹ️  Existing data found from previous installation" -ForegroundColor Cyan
+        Write-Host ""
+        $startFresh = Read-Host "Do you want to start FRESH (delete existing data)? (yes/no)"
+        Write-Host ""
+
+        if ($startFresh -eq "yes") {
+            Write-Host "🗑️  Removing existing data volumes..." -ForegroundColor Yellow
+            try {
+                docker compose down -v 2>$null
+            } catch {
+                # Ignore errors if services aren't running
+            }
+            Write-Host "✓ Starting with fresh database" -ForegroundColor Green
+        } else {
+            Write-Host "✓ Preserving existing data" -ForegroundColor Green
+        }
+        Write-Host ""
+    }
+}
 
 # Check if .env exists
 if (!(Test-Path .env)) {

@@ -1,31 +1,56 @@
 # Uninstall script for Windows - Complete removal of CSFrace Scrape
 # Usage: .\scripts\uninstall.ps1
+# Non-interactive mode: $env:SKIP_PROMPTS="1"; .\scripts\uninstall.ps1
 
 $ErrorActionPreference = "Stop"
 
 Write-Host "🗑️  CSFrace Scrape - Uninstallation" -ForegroundColor Cyan
 Write-Host "====================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "⚠️  WARNING: This will remove:" -ForegroundColor Yellow
+Write-Host "⚠️  This will remove:" -ForegroundColor Yellow
 Write-Host "   - All containers"
-Write-Host "   - All volumes (including database data)"
 Write-Host "   - All Docker images"
 Write-Host "   - Build cache"
 Write-Host ""
 
-$confirmation = Read-Host "Are you sure you want to continue? (yes/no)"
-Write-Host ""
+if ($env:SKIP_PROMPTS -eq "1") {
+    $deleteData = "no"
+    Write-Host "ℹ️  Data will be preserved (non-interactive mode)" -ForegroundColor Cyan
+    Write-Host ""
+} else {
+    $deleteData = Read-Host "Do you want to DELETE all data (database, metrics, etc.)? (yes/no)"
+    Write-Host ""
 
-if ($confirmation -ne "yes") {
-    Write-Host "❌ Uninstallation cancelled" -ForegroundColor Red
-    exit 0
+    if ($deleteData -eq "yes") {
+        Write-Host "⚠️  WARNING: This will permanently delete:" -ForegroundColor Red
+        Write-Host "   - All database data"
+        Write-Host "   - Redis cache"
+        Write-Host "   - Grafana dashboards and settings"
+        Write-Host "   - Prometheus metrics history"
+        Write-Host ""
+
+        $confirmDelete = Read-Host "Are you ABSOLUTELY SURE? (yes/no)"
+        Write-Host ""
+
+        if ($confirmDelete -ne "yes") {
+            $deleteData = "no"
+            Write-Host "✓ Data will be preserved" -ForegroundColor Green
+        }
+    } else {
+        Write-Host "✓ Data will be preserved for next installation" -ForegroundColor Green
+    }
 }
 
+Write-Host ""
 Write-Host "🛑 Stopping all services..." -ForegroundColor Yellow
 docker compose down
 
-Write-Host "🗑️  Removing volumes..." -ForegroundColor Yellow
-docker compose down -v
+if ($deleteData -eq "yes") {
+    Write-Host "🗑️  Removing volumes and all data..." -ForegroundColor Yellow
+    docker compose down -v
+} else {
+    Write-Host "✓ Keeping volumes (data preserved)" -ForegroundColor Green
+}
 
 Write-Host "🗑️  Removing Docker images..." -ForegroundColor Yellow
 try {
@@ -43,6 +68,25 @@ if (Test-Path "nginx\ssl") {
     Write-Host "   ✓ SSL certificate files removed" -ForegroundColor Green
 } else {
     Write-Host "   (No SSL certificate files found)" -ForegroundColor Gray
+}
+
+# Check for output directory
+if (Test-Path "output") {
+    if ($env:SKIP_PROMPTS -eq "1") {
+        Write-Host "ℹ️  Output files preserved (non-interactive mode)" -ForegroundColor Cyan
+    } else {
+        Write-Host ""
+        $deleteOutput = Read-Host "Do you want to DELETE output files (scraped content)? (yes/no)"
+        Write-Host ""
+
+        if ($deleteOutput -eq "yes") {
+            Write-Host "🗑️  Removing output files..." -ForegroundColor Yellow
+            Remove-Item -Recurse -Force "output"
+            Write-Host "   ✓ Output files removed" -ForegroundColor Green
+        } else {
+            Write-Host "   ✓ Output files preserved" -ForegroundColor Green
+        }
+    }
 }
 
 Write-Host ""

@@ -1,12 +1,37 @@
 #!/bin/bash
 # Simple one-command installation script
 # Usage: ./scripts/install.sh
+# Non-interactive mode: SKIP_PROMPTS=1 ./scripts/install.sh
 
 set -e
 
 echo "🚀 CSFrace Scrape - Installation"
 echo "================================="
 echo ""
+
+# Check for existing data volumes
+EXISTING_VOLUMES=$(docker volume ls --filter name=csfrace-scrape --format "{{.Name}}" | wc -l)
+
+if [ $EXISTING_VOLUMES -gt 0 ]; then
+    if [ "$SKIP_PROMPTS" = "1" ]; then
+        echo "ℹ️  Existing data found - preserving (non-interactive mode)"
+        echo ""
+    else
+        echo "ℹ️  Existing data found from previous installation"
+        echo ""
+        read -p "Do you want to start FRESH (delete existing data)? (yes/no): " -r
+        echo ""
+
+        if [[ $REPLY =~ ^[Yy]es$ ]]; then
+            echo "🗑️  Removing existing data volumes..."
+            docker compose down -v 2>/dev/null || true
+            echo "✓ Starting with fresh database"
+        else
+            echo "✓ Preserving existing data"
+        fi
+        echo ""
+    fi
+fi
 
 # Check if .env exists
 if [ ! -f .env ]; then

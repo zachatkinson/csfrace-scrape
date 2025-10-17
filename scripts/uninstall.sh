@@ -1,31 +1,58 @@
 #!/bin/bash
 # Uninstall script - Complete removal of CSFrace Scrape
 # Usage: ./scripts/uninstall.sh
+# Non-interactive mode: SKIP_PROMPTS=1 ./scripts/uninstall.sh
 
 set -e
 
 echo "🗑️  CSFrace Scrape - Uninstallation"
 echo "===================================="
 echo ""
-echo "⚠️  WARNING: This will remove:"
+echo "⚠️  This will remove:"
 echo "   - All containers"
-echo "   - All volumes (including database data)"
 echo "   - All Docker images"
 echo "   - Build cache"
 echo ""
-read -p "Are you sure you want to continue? (yes/no): " -r
-echo ""
 
-if [[ ! $REPLY =~ ^[Yy]es$ ]]; then
-    echo "❌ Uninstallation cancelled"
-    exit 0
+if [ "$SKIP_PROMPTS" = "1" ]; then
+    DELETE_DATA="no"
+    echo "ℹ️  Data will be preserved (non-interactive mode)"
+    echo ""
+else
+    read -p "Do you want to DELETE all data (database, metrics, etc.)? (yes/no): " -r
+    echo ""
+
+    DELETE_DATA=$REPLY
+
+    if [[ $DELETE_DATA =~ ^[Yy]es$ ]]; then
+        echo "⚠️  WARNING: This will permanently delete:"
+        echo "   - All database data"
+        echo "   - Redis cache"
+        echo "   - Grafana dashboards and settings"
+        echo "   - Prometheus metrics history"
+        echo ""
+        read -p "Are you ABSOLUTELY SURE? (yes/no): " -r
+        echo ""
+
+        if [[ ! $REPLY =~ ^[Yy]es$ ]]; then
+            DELETE_DATA="no"
+            echo "✓ Data will be preserved"
+        fi
+    else
+        echo "✓ Data will be preserved for next installation"
+    fi
 fi
 
+echo ""
 echo "🛑 Stopping all services..."
 docker compose down
 
-echo "🗑️  Removing volumes..."
-docker compose down -v
+if [[ $DELETE_DATA =~ ^[Yy]es$ ]]; then
+    echo "🗑️  Removing volumes and all data..."
+    docker compose down -v
+else
+    echo "✓ Keeping volumes (data preserved)"
+fi
 
 echo "🗑️  Removing Docker images..."
 docker rmi csfrace-scrape-backend csfrace-scrape-frontend 2>/dev/null || echo "   (Images already removed)"
@@ -39,6 +66,25 @@ if [ -d "nginx/ssl" ]; then
     echo "   ✓ SSL certificate files removed"
 else
     echo "   (No SSL certificate files found)"
+fi
+
+# Check for output directory
+if [ -d "output" ]; then
+    if [ "$SKIP_PROMPTS" = "1" ]; then
+        echo "ℹ️  Output files preserved (non-interactive mode)"
+    else
+        echo ""
+        read -p "Do you want to DELETE output files (scraped content)? (yes/no): " -r
+        echo ""
+
+        if [[ $REPLY =~ ^[Yy]es$ ]]; then
+            echo "🗑️  Removing output files..."
+            rm -rf output
+            echo "   ✓ Output files removed"
+        else
+            echo "   ✓ Output files preserved"
+        fi
+    fi
 fi
 
 echo ""
