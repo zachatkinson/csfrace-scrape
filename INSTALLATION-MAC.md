@@ -115,11 +115,17 @@ docker compose restart nginx
 ```
 
 The script will:
-- Generate SSL certificates for localhost
+- Check if valid certificates already exist (reuses them if found)
+- Generate SSL certificates for localhost if needed
 - Add certificate to macOS Keychain and mark as trusted
 - Enable HTTPS access at https://localhost
 
-**Note**: You'll be prompted for your password to add the certificate to the system keychain.
+**Important Notes:**
+- Certificates are **shared across projects** and persist after uninstall
+- Existing valid certificates are automatically reused
+- Certificates expire after 365 days (script will notify you)
+- You'll be prompted for your password to add the certificate to the system keychain
+- To remove the certificate from your system: `./scripts/remove-localhost-cert.sh`
 
 ### Step 7: Verify Installation
 

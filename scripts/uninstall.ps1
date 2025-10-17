@@ -37,33 +37,12 @@ try {
 Write-Host "🗑️  Removing build cache..." -ForegroundColor Yellow
 docker builder prune -f
 
-Write-Host "🗑️  Removing SSL certificates..." -ForegroundColor Yellow
+Write-Host "🗑️  Removing SSL certificate files..." -ForegroundColor Yellow
 if (Test-Path "nginx\ssl") {
-    # Remove certificate from Windows certificate store if it exists
-    if (Test-Path "nginx\ssl\localhost.crt") {
-        Write-Host "   Removing certificate from Windows certificate store..." -ForegroundColor Gray
-        try {
-            $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2("nginx\ssl\localhost.crt")
-            $store = New-Object System.Security.Cryptography.X509Certificates.X509Store("Root", "LocalMachine")
-            $store.Open("ReadWrite")
-            $existingCerts = $store.Certificates | Where-Object { $_.Subject -eq $cert.Subject -and $_.Thumbprint -eq $cert.Thumbprint }
-            if ($existingCerts) {
-                $store.Remove($existingCerts[0])
-                Write-Host "   ✓ Certificate removed from Windows certificate store" -ForegroundColor Green
-            } else {
-                Write-Host "   (Certificate not in store or already removed)" -ForegroundColor Gray
-            }
-            $store.Close()
-        } catch {
-            Write-Host "   (Could not remove from certificate store - may require Administrator privileges)" -ForegroundColor Gray
-        }
-    }
-
-    # Remove SSL directory
     Remove-Item -Recurse -Force "nginx\ssl"
-    Write-Host "   ✓ SSL certificates removed" -ForegroundColor Green
+    Write-Host "   ✓ SSL certificate files removed" -ForegroundColor Green
 } else {
-    Write-Host "   (No SSL certificates found)" -ForegroundColor Gray
+    Write-Host "   (No SSL certificate files found)" -ForegroundColor Gray
 }
 
 Write-Host ""
@@ -72,7 +51,11 @@ Write-Host ""
 Write-Host "Note: The following were NOT removed:" -ForegroundColor Yellow
 Write-Host "   - Source code in this directory"
 Write-Host "   - .env configuration file"
+Write-Host "   - SSL certificates in Windows certificate store (shared across projects)"
 Write-Host "   - Base Docker images (postgres, redis, etc.)"
+Write-Host ""
+Write-Host "To remove SSL certificate from certificate store:"
+Write-Host "   .\scripts\remove-localhost-cert.ps1"
 Write-Host ""
 Write-Host "To remove source code: cd .. && Remove-Item -Recurse -Force csfrace-scrape"
 Write-Host "To remove .env: Remove-Item .env"

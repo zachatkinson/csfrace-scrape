@@ -147,11 +147,17 @@ docker compose restart nginx
 ```
 
 The script will:
-- Generate SSL certificates for localhost
+- Check if valid certificates already exist (reuses them if found)
+- Generate SSL certificates for localhost if needed
 - Add certificate to Windows Trusted Root store
 - Enable HTTPS access at https://localhost
 
-**Note**: You may need to run PowerShell as Administrator for automatic certificate installation.
+**Important Notes:**
+- Certificates are **shared across projects** and persist after uninstall
+- Existing valid certificates are automatically reused
+- Certificates expire after 365 days (script will notify you)
+- You may need to run PowerShell as Administrator for certificate installation
+- To remove the certificate from your system: `.\scripts\remove-localhost-cert.ps1`
 
 ### Step 7: Verify Installation
 

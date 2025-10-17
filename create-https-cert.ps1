@@ -13,8 +13,27 @@ if (-not (Test-Path $sslDir)) {
 if ((Test-Path "$sslDir\localhost.crt") -and (Test-Path "$sslDir\localhost.key")) {
     Write-Host ""
     Write-Host "ℹ️  SSL certificates already exist in nginx\ssl\" -ForegroundColor Yellow
-    Write-Host ""
-    $regenerate = Read-Host "Do you want to regenerate them? (yes/no)"
+
+    # Check certificate expiration
+    try {
+        $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2("$sslDir\localhost.crt")
+        $daysUntilExpiry = ($cert.NotAfter - (Get-Date)).Days
+
+        if ($daysUntilExpiry -lt 30) {
+            Write-Host "⚠️  Certificate expires in $daysUntilExpiry days - regeneration recommended" -ForegroundColor Yellow
+            Write-Host ""
+            $regenerate = Read-Host "Do you want to regenerate the certificate? (yes/no)"
+        } else {
+            Write-Host "✅ Certificate is valid for $daysUntilExpiry more days" -ForegroundColor Green
+            Write-Host ""
+            $regenerate = Read-Host "Do you want to regenerate anyway? (yes/no)"
+        }
+    } catch {
+        Write-Host "⚠️  Could not read certificate expiration" -ForegroundColor Yellow
+        Write-Host ""
+        $regenerate = Read-Host "Do you want to regenerate the certificate? (yes/no)"
+    }
+
     Write-Host ""
 
     if ($regenerate -ne "yes") {

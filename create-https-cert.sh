@@ -11,8 +11,23 @@ echo "🔒 Creating HTTPS certificates for local development..."
 if [ -f "nginx/ssl/localhost.crt" ] && [ -f "nginx/ssl/localhost.key" ]; then
     echo ""
     echo "ℹ️  SSL certificates already exist in nginx/ssl/"
-    echo ""
-    read -p "Do you want to regenerate them? (yes/no): " -r
+
+    # Check certificate expiration
+    EXPIRY_DATE=$(openssl x509 -enddate -noout -in nginx/ssl/localhost.crt | cut -d= -f2)
+    EXPIRY_EPOCH=$(date -j -f "%b %d %H:%M:%S %Y %Z" "$EXPIRY_DATE" "+%s" 2>/dev/null || date -d "$EXPIRY_DATE" "+%s" 2>/dev/null)
+    CURRENT_EPOCH=$(date "+%s")
+    DAYS_UNTIL_EXPIRY=$(( ($EXPIRY_EPOCH - $CURRENT_EPOCH) / 86400 ))
+
+    if [ $DAYS_UNTIL_EXPIRY -lt 30 ]; then
+        echo "⚠️  Certificate expires in $DAYS_UNTIL_EXPIRY days - regeneration recommended"
+        echo ""
+        read -p "Do you want to regenerate the certificate? (yes/no): " -r
+    else
+        echo "✅ Certificate is valid for $DAYS_UNTIL_EXPIRY more days"
+        echo ""
+        read -p "Do you want to regenerate anyway? (yes/no): " -r
+    fi
+
     echo ""
 
     if [[ ! $REPLY =~ ^[Yy]es$ ]]; then
