@@ -11,11 +11,7 @@ Complete installation guide for Windows 10/11.
    - **Minimum version**: Docker 24.0+, Docker Compose 2.20+
    - Requires **WSL 2** (Windows Subsystem for Linux 2)
 
-2. **Git for Windows**
-   - Download: [Git for Windows](https://git-scm.com/download/win)
-   - **Minimum version**: Git 2.40+
-
-3. **WSL 2**
+2. **WSL 2**
    - Required by Docker Desktop
    - Installation instructions below
 
@@ -49,16 +45,22 @@ wsl --set-default-version 2
 
 ### Automated Installation
 
-**PowerShell (Run as Administrator):**
+1. **Download the project**:
+   - Visit https://github.com/zachatkinson/csfrace-scrape
+   - Click the green **Code** button
+   - Select **Download ZIP**
+   - Save to your **Desktop**
 
-```powershell
-# Clone the repository
-git clone https://github.com/zachatkinson/csfrace-scrape.git
-cd csfrace-scrape
+2. **Extract the files**:
+   - Right-click the downloaded ZIP file on your Desktop
+   - Select **Extract All...**
+   - Click **Extract** (it will create a folder on your Desktop)
 
-# Run the automated fresh install test
-.\scripts\test-fresh-install-windows.ps1
-```
+3. **Run the installer**:
+   - Open the extracted folder: `csfrace-scrape-master`
+   - Right-click on **`install.ps1`** (in the `scripts` folder)
+   - Select **Run with PowerShell**
+   - If prompted, allow the script to run
 
 The automated script will:
 1. ✅ Clean up any existing containers and volumes
@@ -90,39 +92,22 @@ docker --version
 docker compose version
 ```
 
-### Step 2: Download Source Code
-
-**Option A: Using Git (Recommended)**
-
-**PowerShell:**
-
-```powershell
-git clone https://github.com/zachatkinson/csfrace-scrape.git
-cd csfrace-scrape
-```
-
-**Command Prompt:**
-
-```cmd
-git clone https://github.com/zachatkinson/csfrace-scrape.git
-cd csfrace-scrape
-```
-
-**Option B: Download ZIP (No Git Required)**
+### Step 2: Download Project Files
 
 1. Visit https://github.com/zachatkinson/csfrace-scrape
 2. Click the green **Code** button
 3. Select **Download ZIP**
-4. Extract the ZIP file:
+4. Save to your **Desktop** (or preferred location)
+5. Extract the ZIP file:
    - Right-click the downloaded ZIP file
    - Select **Extract All...**
-   - Choose destination folder (e.g., `C:\Users\YourName\Projects`)
-   - Open extracted folder in PowerShell or Command Prompt:
-     ```powershell
-     cd C:\Users\YourName\Projects\csfrace-scrape-master
-     ```
+   - Click **Extract** (creates `csfrace-scrape-master` folder)
+6. Open PowerShell in the extracted folder:
+   - Open the `csfrace-scrape-master` folder
+   - Hold **Shift** and right-click inside the folder
+   - Select **Open PowerShell window here**
 
-**Note:** If using the ZIP method, you won't be able to pull updates with `git pull`. You'll need to download the latest ZIP again for updates.
+**Note:** To update the project later, download the latest ZIP file from GitHub and replace the old folder.
 
 ### Step 3: Configure Environment
 
@@ -276,19 +261,6 @@ Docker Desktop runs containers in WSL 2 for best performance:
 2. Enable integration with your WSL 2 distributions
 3. Click **Apply & Restart**
 
-### Line Endings (CRLF vs LF)
-
-Git on Windows converts line endings by default. To prevent issues:
-
-```powershell
-# Configure Git to not convert line endings
-git config --global core.autocrlf input
-
-# If you already cloned, fix existing files:
-git rm --cached -r .
-git reset --hard HEAD
-```
-
 ### Performance Tips
 
 For better performance on Windows:
@@ -297,20 +269,6 @@ For better performance on Windows:
    - **CPUs**: 4+ cores recommended
    - **Memory**: 8GB+ recommended
    - **Disk**: 60GB+ recommended
-
-2. **Store code in WSL 2 filesystem** (optional, for better performance):
-   ```powershell
-   # Access WSL 2 filesystem
-   wsl
-
-   # Clone in Linux filesystem
-   cd ~
-   git clone https://github.com/zachatkinson/csfrace-scrape.git
-   cd csfrace-scrape
-
-   # Run Docker commands from WSL
-   docker compose up -d
-   ```
 
 ### Windows Firewall
 
@@ -478,19 +436,31 @@ docker compose -f docker-compose.prod.yml up -d
 
 ## Updating
 
-### Pull Latest Changes
+### Download Latest Version
 
-```powershell
-# Stop services
-docker compose down
+1. **Stop the current services**:
+   ```powershell
+   docker compose down
+   ```
 
-# Pull latest code
-git pull origin master
+2. **Download the latest version**:
+   - Visit https://github.com/zachatkinson/csfrace-scrape
+   - Click the green **Code** button
+   - Select **Download ZIP**
+   - Save to your Desktop
 
-# Rebuild and restart
-docker compose build
-docker compose up -d
-```
+3. **Replace the old files**:
+   - Extract the new ZIP file
+   - Delete or rename the old `csfrace-scrape-master` folder
+   - Move the new folder to your Desktop
+
+4. **Rebuild and restart**:
+   - Open PowerShell in the new folder
+   - Run:
+     ```powershell
+     docker compose build
+     docker compose up -d
+     ```
 
 ## Uninstalling
 

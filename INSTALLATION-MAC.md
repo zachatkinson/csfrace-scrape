@@ -63,29 +63,30 @@ docker --version
 docker compose version
 ```
 
-### Step 2: Download Source Code
+### Step 2: Download Project Files
 
-**Option A: Using Git (Recommended)**
+**Recommended for Most Users:**
 
+1. Visit https://github.com/zachatkinson/csfrace-scrape
+2. Click the green **Code** button
+3. Select **Download ZIP**
+4. The ZIP file will download to your **Downloads** folder
+5. Double-click the ZIP file to extract it (or it may extract automatically)
+6. Move the `csfrace-scrape-master` folder to your **Desktop** (or preferred location)
+7. Open Terminal and navigate to the folder:
+   ```bash
+   cd ~/Desktop/csfrace-scrape-master
+   ```
+
+**Advanced Users (Git):**
+
+If you're comfortable with Git and want easy updates:
 ```bash
 git clone https://github.com/zachatkinson/csfrace-scrape.git
 cd csfrace-scrape
 ```
 
-**Option B: Download ZIP (No Git Required)**
-
-1. Visit https://github.com/zachatkinson/csfrace-scrape
-2. Click the green **Code** button
-3. Select **Download ZIP**
-4. Extract the ZIP file:
-   ```bash
-   # If downloaded to ~/Downloads
-   cd ~/Downloads
-   unzip csfrace-scrape-master.zip
-   cd csfrace-scrape-master
-   ```
-
-**Note:** If using the ZIP method, you won't be able to pull updates with `git pull`. You'll need to download the latest ZIP again for updates.
+**Note:** The ZIP download method requires manually downloading updates. Git users can run `git pull` to update.
 
 ### Step 3: Configure Environment
 
@@ -405,7 +406,31 @@ docker compose -f docker-compose.prod.yml up -d
 
 ## Updating
 
-### Pull Latest Changes
+### Download Latest Version (ZIP Users)
+
+1. **Stop the current services**:
+   ```bash
+   docker compose down
+   ```
+
+2. **Download the latest version**:
+   - Visit https://github.com/zachatkinson/csfrace-scrape
+   - Click the green **Code** button
+   - Select **Download ZIP**
+   - Extract the ZIP file
+
+3. **Replace the old files**:
+   - Delete or rename the old folder
+   - Move the new `csfrace-scrape-master` folder to your Desktop
+
+4. **Rebuild and restart**:
+   ```bash
+   cd ~/Desktop/csfrace-scrape-master
+   docker compose build
+   docker compose up -d
+   ```
+
+### Pull Latest Changes (Git Users)
 
 ```bash
 # Stop services
