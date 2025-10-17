@@ -63,12 +63,29 @@ docker --version
 docker compose version
 ```
 
-### Step 2: Clone Repository
+### Step 2: Download Source Code
+
+**Option A: Using Git (Recommended)**
 
 ```bash
 git clone https://github.com/zachatkinson/csfrace-scrape.git
 cd csfrace-scrape
 ```
+
+**Option B: Download ZIP (No Git Required)**
+
+1. Visit https://github.com/zachatkinson/csfrace-scrape
+2. Click the green **Code** button
+3. Select **Download ZIP**
+4. Extract the ZIP file:
+   ```bash
+   # If downloaded to ~/Downloads
+   cd ~/Downloads
+   unzip csfrace-scrape-master.zip
+   cd csfrace-scrape-master
+   ```
+
+**Note:** If using the ZIP method, you won't be able to pull updates with `git pull`. You'll need to download the latest ZIP again for updates.
 
 ### Step 3: Configure Environment
 

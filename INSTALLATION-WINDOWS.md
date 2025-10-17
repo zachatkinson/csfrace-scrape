@@ -90,7 +90,9 @@ docker --version
 docker compose version
 ```
 
-### Step 2: Clone Repository
+### Step 2: Download Source Code
+
+**Option A: Using Git (Recommended)**
 
 **PowerShell:**
 
@@ -105,6 +107,22 @@ cd csfrace-scrape
 git clone https://github.com/zachatkinson/csfrace-scrape.git
 cd csfrace-scrape
 ```
+
+**Option B: Download ZIP (No Git Required)**
+
+1. Visit https://github.com/zachatkinson/csfrace-scrape
+2. Click the green **Code** button
+3. Select **Download ZIP**
+4. Extract the ZIP file:
+   - Right-click the downloaded ZIP file
+   - Select **Extract All...**
+   - Choose destination folder (e.g., `C:\Users\YourName\Projects`)
+   - Open extracted folder in PowerShell or Command Prompt:
+     ```powershell
+     cd C:\Users\YourName\Projects\csfrace-scrape-master
+     ```
+
+**Note:** If using the ZIP method, you won't be able to pull updates with `git pull`. You'll need to download the latest ZIP again for updates.
 
 ### Step 3: Configure Environment
 
