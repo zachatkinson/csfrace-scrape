@@ -50,14 +50,29 @@ docker compose build --no-cache
 Write-Host "✓ Images built successfully" -ForegroundColor Green
 Write-Host ""
 
-# Step 6: Start services
-Write-Host "Step 6: Starting all services..." -ForegroundColor Yellow
+# Step 6: Generate HTTPS certificates
+Write-Host "Step 6: Generating HTTPS certificates..." -ForegroundColor Yellow
+if (Test-Path ".\create-https-cert.ps1") {
+    try {
+        & ".\create-https-cert.ps1"
+        Write-Host "✓ HTTPS certificates created" -ForegroundColor Green
+    } catch {
+        Write-Host "⚠ SSL certificate generation failed: $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "  Continuing without HTTPS (you can run .\create-https-cert.ps1 later)" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "⚠ create-https-cert.ps1 not found, skipping SSL setup" -ForegroundColor Yellow
+}
+Write-Host ""
+
+# Step 7: Start services
+Write-Host "Step 7: Starting all services..." -ForegroundColor Yellow
 docker compose up -d
 Write-Host "✓ Services started" -ForegroundColor Green
 Write-Host ""
 
-# Step 7: Wait for services to be healthy
-Write-Host "Step 7: Waiting for services to be healthy (max 60 seconds)..." -ForegroundColor Yellow
+# Step 8: Wait for services to be healthy
+Write-Host "Step 8: Waiting for services to be healthy (max 60 seconds)..." -ForegroundColor Yellow
 $maxAttempts = 12
 for ($i = 1; $i -le $maxAttempts; $i++) {
     Write-Host "Health check attempt $i/$maxAttempts..."
@@ -93,8 +108,8 @@ for ($i = 1; $i -le $maxAttempts; $i++) {
 }
 Write-Host ""
 
-# Step 8: Run smoke tests
-Write-Host "Step 8: Running smoke tests..." -ForegroundColor Yellow
+# Step 9: Run smoke tests
+Write-Host "Step 9: Running smoke tests..." -ForegroundColor Yellow
 
 # Test backend API
 Write-Host "Testing backend API..."
@@ -147,11 +162,13 @@ Write-Host "✓ Fresh Installation Test PASSED!" -ForegroundColor Green
 Write-Host "======================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "Services are running at:"
-Write-Host "  - Frontend:    http://localhost:3000"
-Write-Host "  - Backend:     http://localhost:8000"
-Write-Host "  - API Docs:    http://localhost:8000/docs"
-Write-Host "  - Prometheus:  http://localhost:9090"
-Write-Host "  - Grafana:     http://localhost:3001 (admin/admin)"
+Write-Host "  - Frontend (HTTPS): https://localhost"
+Write-Host "  - Frontend (HTTP):  http://localhost:3000"
+Write-Host "  - Backend (HTTPS):  https://localhost/api"
+Write-Host "  - Backend (HTTP):   http://localhost:8000"
+Write-Host "  - API Docs:         http://localhost:8000/docs"
+Write-Host "  - Prometheus:       http://localhost:9090"
+Write-Host "  - Grafana:          http://localhost:3001 (admin/admin)"
 Write-Host ""
 Write-Host "Useful commands:"
 Write-Host "  - View logs:        docker compose logs -f"

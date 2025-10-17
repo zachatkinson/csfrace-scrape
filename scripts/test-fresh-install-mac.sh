@@ -57,14 +57,25 @@ docker compose build --no-cache
 echo -e "${GREEN}✓ Images built successfully${NC}"
 echo ""
 
-# Step 6: Start services
-echo -e "${YELLOW}Step 6: Starting all services...${NC}"
+# Step 6: Generate HTTPS certificates
+echo -e "${YELLOW}Step 6: Generating HTTPS certificates...${NC}"
+if [ -f ./create-https-cert.sh ]; then
+    chmod +x ./create-https-cert.sh
+    ./create-https-cert.sh
+    echo -e "${GREEN}✓ HTTPS certificates created${NC}"
+else
+    echo -e "${YELLOW}⚠ create-https-cert.sh not found, skipping SSL setup${NC}"
+fi
+echo ""
+
+# Step 7: Start services
+echo -e "${YELLOW}Step 7: Starting all services...${NC}"
 docker compose up -d
 echo -e "${GREEN}✓ Services started${NC}"
 echo ""
 
-# Step 7: Wait for services to be healthy
-echo -e "${YELLOW}Step 7: Waiting for services to be healthy (max 60 seconds)...${NC}"
+# Step 8: Wait for services to be healthy
+echo -e "${YELLOW}Step 8: Waiting for services to be healthy (max 60 seconds)...${NC}"
 for i in {1..12}; do
     echo "Health check attempt $i/12..."
 
@@ -89,8 +100,8 @@ for i in {1..12}; do
 done
 echo ""
 
-# Step 8: Run smoke tests
-echo -e "${YELLOW}Step 8: Running smoke tests...${NC}"
+# Step 9: Run smoke tests
+echo -e "${YELLOW}Step 9: Running smoke tests...${NC}"
 
 # Test backend API
 echo "Testing backend API..."
@@ -137,11 +148,13 @@ echo "✓ Fresh Installation Test PASSED!"
 echo "======================================${NC}"
 echo ""
 echo "Services are running at:"
-echo "  - Frontend:    http://localhost:3000"
-echo "  - Backend:     http://localhost:8000"
-echo "  - API Docs:    http://localhost:8000/docs"
-echo "  - Prometheus:  http://localhost:9090"
-echo "  - Grafana:     http://localhost:3001 (admin/admin)"
+echo "  - Frontend (HTTPS): https://localhost"
+echo "  - Frontend (HTTP):  http://localhost:3000"
+echo "  - Backend (HTTPS):  https://localhost/api"
+echo "  - Backend (HTTP):   http://localhost:8000"
+echo "  - API Docs:         http://localhost:8000/docs"
+echo "  - Prometheus:       http://localhost:9090"
+echo "  - Grafana:          http://localhost:3001 (admin/admin)"
 echo ""
 echo "Useful commands:"
 echo "  - View logs:        docker compose logs -f"
