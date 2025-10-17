@@ -7,6 +7,27 @@ set -e  # Exit on error
 
 echo "🔒 Creating HTTPS certificates for local development..."
 
+# Check if certificates already exist
+if [ -f "nginx/ssl/localhost.crt" ] && [ -f "nginx/ssl/localhost.key" ]; then
+    echo ""
+    echo "ℹ️  SSL certificates already exist in nginx/ssl/"
+    echo ""
+    read -p "Do you want to regenerate them? (yes/no): " -r
+    echo ""
+
+    if [[ ! $REPLY =~ ^[Yy]es$ ]]; then
+        echo "✅ Using existing certificates"
+        echo ""
+        echo "To use the existing certificates:"
+        echo "1. Restart nginx container: docker compose restart nginx"
+        echo "2. Access https://localhost in your browser"
+        exit 0
+    fi
+
+    echo "🗑️  Removing old certificates..."
+    rm -f nginx/ssl/localhost.crt nginx/ssl/localhost.key nginx/ssl/localhost.csr
+fi
+
 # Create nginx ssl directory
 mkdir -p nginx/ssl
 

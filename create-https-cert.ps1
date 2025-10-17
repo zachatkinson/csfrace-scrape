@@ -9,6 +9,29 @@ if (-not (Test-Path $sslDir)) {
     New-Item -ItemType Directory -Path $sslDir -Force | Out-Null
 }
 
+# Check if certificates already exist
+if ((Test-Path "$sslDir\localhost.crt") -and (Test-Path "$sslDir\localhost.key")) {
+    Write-Host ""
+    Write-Host "ℹ️  SSL certificates already exist in nginx\ssl\" -ForegroundColor Yellow
+    Write-Host ""
+    $regenerate = Read-Host "Do you want to regenerate them? (yes/no)"
+    Write-Host ""
+
+    if ($regenerate -ne "yes") {
+        Write-Host "✅ Using existing certificates" -ForegroundColor Green
+        Write-Host ""
+        Write-Host "To use the existing certificates:"
+        Write-Host "1. Restart nginx container: docker compose restart nginx"
+        Write-Host "2. Access https://localhost in your browser"
+        exit 0
+    }
+
+    Write-Host "🗑️  Removing old certificates..." -ForegroundColor Yellow
+    Remove-Item "$sslDir\localhost.crt" -Force -ErrorAction SilentlyContinue
+    Remove-Item "$sslDir\localhost.key" -Force -ErrorAction SilentlyContinue
+    Remove-Item "$sslDir\localhost.csr" -Force -ErrorAction SilentlyContinue
+}
+
 # Check if OpenSSL is available
 $opensslPath = Get-Command openssl -ErrorAction SilentlyContinue
 

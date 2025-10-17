@@ -37,6 +37,35 @@ try {
 Write-Host "🗑️  Removing build cache..." -ForegroundColor Yellow
 docker builder prune -f
 
+Write-Host "🗑️  Removing SSL certificates..." -ForegroundColor Yellow
+if (Test-Path "nginx\ssl") {
+    # Remove certificate from Windows certificate store if it exists
+    if (Test-Path "nginx\ssl\localhost.crt") {
+        Write-Host "   Removing certificate from Windows certificate store..." -ForegroundColor Gray
+        try {
+            $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2("nginx\ssl\localhost.crt")
+            $store = New-Object System.Security.Cryptography.X509Certificates.X509Store("Root", "LocalMachine")
+            $store.Open("ReadWrite")
+            $existingCerts = $store.Certificates | Where-Object { $_.Subject -eq $cert.Subject -and $_.Thumbprint -eq $cert.Thumbprint }
+            if ($existingCerts) {
+                $store.Remove($existingCerts[0])
+                Write-Host "   ✓ Certificate removed from Windows certificate store" -ForegroundColor Green
+            } else {
+                Write-Host "   (Certificate not in store or already removed)" -ForegroundColor Gray
+            }
+            $store.Close()
+        } catch {
+            Write-Host "   (Could not remove from certificate store - may require Administrator privileges)" -ForegroundColor Gray
+        }
+    }
+
+    # Remove SSL directory
+    Remove-Item -Recurse -Force "nginx\ssl"
+    Write-Host "   ✓ SSL certificates removed" -ForegroundColor Green
+} else {
+    Write-Host "   (No SSL certificates found)" -ForegroundColor Gray
+}
+
 Write-Host ""
 Write-Host "✅ Uninstallation complete!" -ForegroundColor Green
 Write-Host ""

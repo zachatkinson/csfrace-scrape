@@ -33,6 +33,21 @@ docker rmi csfrace-scrape-backend csfrace-scrape-frontend 2>/dev/null || echo " 
 echo "🗑️  Removing build cache..."
 docker builder prune -f
 
+echo "🗑️  Removing SSL certificates..."
+if [ -d "nginx/ssl" ]; then
+    # Remove certificate from macOS keychain if it exists
+    if [ -f "nginx/ssl/localhost.crt" ]; then
+        echo "   Removing certificate from macOS keychain..."
+        sudo security delete-certificate -c localhost -t 2>/dev/null || echo "   (Certificate not in keychain or requires manual removal)"
+    fi
+
+    # Remove SSL directory
+    rm -rf nginx/ssl
+    echo "   ✓ SSL certificates removed"
+else
+    echo "   (No SSL certificates found)"
+fi
+
 echo ""
 echo "✅ Uninstallation complete!"
 echo ""
