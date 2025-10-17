@@ -73,12 +73,18 @@ cd csfrace-scrape
 
 **Note:** First-time build takes 5-10 minutes (ARM64 Macs may be slower due to Rosetta 2 emulation). Subsequent starts are instant using cached images.
 
-The automated script handles:
-- ✅ Complete cleanup of existing containers/volumes
-- ✅ Fresh Docker build (5-10 minutes)
-- ✅ Health checks for all services
-- ✅ Smoke tests to verify functionality
-- ✅ Service URL listing
+The automated installer handles:
+- ✅ Prompts for data preservation (fresh install vs. keep existing data)
+- ✅ Environment configuration (.env file creation)
+- ✅ Docker image building with progress output
+- ✅ Service startup with health checks
+- ✅ Service URL display with HTTPS instructions
+
+The automated uninstaller (`./scripts/uninstall.sh` or `.\scripts\uninstall.ps1`) handles:
+- ✅ Safe data deletion prompts with confirmation
+- ✅ Container and image cleanup
+- ✅ Optional output file removal
+- ✅ SSL certificate cleanup (preserves system certificates)
 
 ### Manual Installation
 
@@ -94,7 +100,11 @@ cp .env.example .env
 docker compose build
 docker compose up -d
 
-# 4. Verify health
+# 4. Generate SSL certificates (optional but recommended)
+./create-https-cert.sh  # macOS/Linux
+.\create-https-cert.ps1  # Windows
+
+# 5. Verify health
 docker compose ps
 docker compose logs -f
 ```
@@ -103,18 +113,31 @@ docker compose logs -f
 
 | Service | URL | Credentials |
 |---------|-----|-------------|
-| **Frontend** | http://localhost:3000 | - |
-| **Backend API** | http://localhost:8000 | - |
-| **API Docs** | http://localhost:8000/docs | Interactive Swagger UI |
+| **Frontend (HTTPS)** | https://localhost | Requires SSL certificates* |
+| **Frontend (HTTP)** | http://localhost:3000 | Direct access |
+| **Backend API (HTTPS)** | https://localhost/api | Requires SSL certificates* |
+| **Backend API (HTTP)** | http://localhost:8000 | Direct access |
+| **API Docs (HTTPS)** | https://localhost/docs | Requires SSL certificates* |
+| **API Docs (HTTP)** | http://localhost:8000/docs | Interactive Swagger UI |
 | **Grafana** | http://localhost:3001 | admin/admin |
 | **Prometheus** | http://localhost:9090 | - |
+
+**SSL Certificate Setup:*
+```bash
+# macOS/Linux
+./create-https-cert.sh
+
+# Windows (PowerShell)
+.\create-https-cert.ps1
+```
 
 ## 📦 Repository Structure
 
 ```
 csfrace-scrape/                     # Monorepo root
 ├── README.md                       # This file
-├── INSTALLATION.md                 # Detailed install guide
+├── INSTALLATION-MAC.md             # macOS install guide
+├── INSTALLATION-WINDOWS.md         # Windows install guide
 ├── CLAUDE.md                       # Orchestration standards
 ├── docker-compose.yml              # Production orchestration
 ├── docker-compose.dev.yml          # Development environment
@@ -123,10 +146,13 @@ csfrace-scrape/                     # Monorepo root
 ├── nginx/                          # Reverse proxy config
 │   └── nginx.conf                 # Production routing
 ├── scripts/                        # Automation scripts
+│   ├── install.sh                 # macOS/Linux installer
+│   ├── install.ps1                # Windows installer
+│   ├── uninstall.sh               # macOS/Linux uninstaller
+│   ├── uninstall.ps1              # Windows uninstaller
 │   ├── test-fresh-install-mac.sh  # macOS test script
 │   ├── test-fresh-install-windows.ps1  # Windows test script
-│   ├── init-db.sql                # Database initialization
-│   └── complete-cleanup.sh        # Full cleanup utility
+│   └── init-db.sql                # Database initialization
 ├── monitoring/                     # Observability stack
 │   ├── prometheus.yml             # Metrics collection
 │   └── grafana/                   # Dashboard configs
@@ -269,17 +295,25 @@ docker compose exec frontend pnpm test:e2e
 ### Manual Testing
 
 ```bash
-# Test backend health
+# Test backend health (HTTPS - recommended)
+curl -k https://localhost/health
+
+# Test backend health (HTTP - direct access)
 curl http://localhost:8000/health/
 
 # Test frontend
+open https://localhost  # macOS (HTTPS via nginx)
+start https://localhost  # Windows (HTTPS via nginx)
+
+# Or direct HTTP access
 open http://localhost:3000  # macOS
 start http://localhost:3000  # Windows
 
 # Test API endpoints
-curl -X POST http://localhost:8000/auth/register \
+curl -X POST https://localhost/api/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","password":"password123"}'
+  -d '{"email":"test@example.com","password":"password123"}' \
+  -k
 ```
 
 ## 🚀 Production Deployment
@@ -294,8 +328,8 @@ docker compose -f docker-compose.prod.yml build
 docker compose -f docker-compose.prod.yml up -d
 
 # Verify deployment
-curl http://localhost:8000/health/
-curl http://localhost:3000/
+curl -k https://localhost/health
+curl -k https://localhost/
 ```
 
 ### Environment Requirements
@@ -369,7 +403,9 @@ docker compose exec redis redis-cli INFO
 
 ## 🐛 Troubleshooting
 
-See [INSTALLATION.md](INSTALLATION.md) for comprehensive troubleshooting guide.
+See platform-specific installation guides for comprehensive troubleshooting:
+- [INSTALLATION-MAC.md](INSTALLATION-MAC.md) - macOS setup and troubleshooting
+- [INSTALLATION-WINDOWS.md](INSTALLATION-WINDOWS.md) - Windows setup and troubleshooting
 
 ### Quick Fixes
 
@@ -406,7 +442,9 @@ docker compose build --no-cache
 
 ### Getting Help
 
-- 📖 **Documentation**: [INSTALLATION.md](INSTALLATION.md) for setup guide
+- 📖 **Documentation**:
+  - [INSTALLATION-MAC.md](INSTALLATION-MAC.md) - macOS installation guide
+  - [INSTALLATION-WINDOWS.md](INSTALLATION-WINDOWS.md) - Windows installation guide
 - 🐛 **Bug Reports**: [GitHub Issues](https://github.com/zachatkinson/csfrace-scrape/issues)
 - 💬 **Discussions**: [GitHub Discussions](https://github.com/zachatkinson/csfrace-scrape/discussions)
 - 📝 **Logs**: Always check `docker compose logs -f` first
