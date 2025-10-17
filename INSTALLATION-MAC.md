@@ -102,17 +102,39 @@ docker compose up -d
 docker compose logs -f
 ```
 
-### Step 6: Verify Installation
+### Step 6: Setup HTTPS (Recommended)
+
+For secure local development and OAuth support:
+
+```bash
+# Generate self-signed SSL certificates
+./create-https-cert.sh
+
+# Restart nginx to load new certificates
+docker compose restart nginx
+```
+
+The script will:
+- Generate SSL certificates for localhost
+- Add certificate to macOS Keychain and mark as trusted
+- Enable HTTPS access at https://localhost
+
+**Note**: You'll be prompted for your password to add the certificate to the system keychain.
+
+### Step 7: Verify Installation
 
 ```bash
 # Check service health
 docker compose ps
 
-# Test backend API
+# Test backend API via HTTPS (recommended)
+curl -k https://localhost/health
+
+# Or via HTTP
 curl http://localhost:8000/health/
 
 # Open frontend in browser
-open http://localhost:3000
+open https://localhost
 ```
 
 ## Service URLs
@@ -121,11 +143,15 @@ Once installed, access the application at:
 
 | Service | URL | Description |
 |---------|-----|-------------|
-| **Frontend** | http://localhost:3000 | Main web interface |
-| **Backend API** | http://localhost:8000 | REST API |
+| **Frontend (HTTPS)** | https://localhost | Main web interface (recommended) |
+| **Frontend (HTTP)** | http://localhost:3000 | Alternative HTTP access |
+| **Backend API (HTTPS)** | https://localhost/api | REST API via nginx (recommended) |
+| **Backend API (HTTP)** | http://localhost:8000 | Direct backend access |
 | **API Documentation** | http://localhost:8000/docs | Interactive API docs (Swagger) |
 | **Prometheus** | http://localhost:9090 | Metrics monitoring |
 | **Grafana** | http://localhost:3001 | Analytics dashboards (admin/admin) |
+
+**Recommended**: Use HTTPS (https://localhost) for all development work, especially when using OAuth.
 
 ## Common Commands
 
