@@ -470,7 +470,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const bytes = new Uint8Array(buffer);
     let binary = "";
     for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i]!);
+      const byte = bytes[i];
+      if (byte !== undefined) {
+        binary += String.fromCharCode(byte);
+      }
     }
     return btoa(binary)
       .replace(/\+/g, "-")
