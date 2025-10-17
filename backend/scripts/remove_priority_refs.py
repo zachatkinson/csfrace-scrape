@@ -33,36 +33,36 @@ for test_file_path in test_files:
 
     print(f"Processing: {test_file_path}")
 
-    with open(file_path, 'r') as f:
+    with open(file_path) as f:
         content = f.read()
 
     # Count priority references before
-    priority_count_before = len(re.findall(r'priority', content, re.IGNORECASE))
+    priority_count_before = len(re.findall(r"priority", content, re.IGNORECASE))
 
     if priority_count_before == 0:
-        print(f"  ✓ No priority references found")
+        print("  ✓ No priority references found")
         continue
 
     # Track changes
     lines_removed = 0
 
     # Remove JobPriority import
-    content = re.sub(r'from src\.common\.status import JobPriority,?\s*', '', content)
-    content = re.sub(r',\s*JobPriority', '', content)
+    content = re.sub(r"from src\.common\.status import JobPriority,?\s*", "", content)
+    content = re.sub(r",\s*JobPriority", "", content)
 
     # Remove priority parameters from function signatures
-    content = re.sub(r',?\s*priority:\s*[^,\)]+', '', content)
+    content = re.sub(r",?\s*priority:\s*[^,\)]+", "", content)
 
     # Remove priority dict entries
-    content = re.sub(r'\s*"priority":\s*[^,\n]+,?\n?', '\n', content)
-    content = re.sub(r'\s*priority=\s*[^,\n\)]+,?\n?', '\n', content)
+    content = re.sub(r'\s*"priority":\s*[^,\n]+,?\n?', "\n", content)
+    content = re.sub(r"\s*priority=\s*[^,\n\)]+,?\n?", "\n", content)
 
     # Count priority references after
-    priority_count_after = len(re.findall(r'priority', content, re.IGNORECASE))
+    priority_count_after = len(re.findall(r"priority", content, re.IGNORECASE))
 
     if priority_count_after < priority_count_before:
         # Write cleaned content
-        with open(file_path, 'w') as f:
+        with open(file_path, "w") as f:
             f.write(content)
         print(f"  ✓ Removed {priority_count_before - priority_count_after} priority references")
     else:

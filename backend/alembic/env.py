@@ -14,7 +14,7 @@ import logging
 import os
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config, inspect, pool, text
+from sqlalchemy import engine_from_config, pool
 from sqlalchemy.exc import SQLAlchemyError
 
 from alembic import context
@@ -166,11 +166,15 @@ def run_migrations_online() -> None:
 
             # BEST PRACTICE: Let Alembic migrations handle all schema creation
             # No manual schema validation or table creation - migrations are single source of truth
-            logger.info("Skipping manual schema validation - using Alembic migrations as single source of truth")
+            logger.info(
+                "Skipping manual schema validation - using Alembic migrations as single source of truth"
+            )
 
             # Configure migration context with environment-specific settings
             # Remove compare_server_default from current_settings since we're using a custom function
-            settings_without_compare = {k: v for k, v in current_settings.items() if k != 'compare_server_default'}
+            settings_without_compare = {
+                k: v for k, v in current_settings.items() if k != "compare_server_default"
+            }
 
             context.configure(
                 connection=connection,
@@ -207,7 +211,14 @@ def run_migrations_online() -> None:
         raise
 
 
-def compare_server_default(context, inspected_column, metadata_column, inspected_default, metadata_default, rendered_metadata_default):
+def compare_server_default(
+    _context,
+    _inspected_column,
+    metadata_column,
+    _inspected_default,
+    _metadata_default,
+    _rendered_metadata_default,
+):
     """
     Custom server default comparison to handle JSON/JSONB types.
 
@@ -215,7 +226,7 @@ def compare_server_default(context, inspected_column, metadata_column, inspected
     so we skip comparison for JSON/JSONB columns to avoid autogenerate errors.
     """
     # Skip comparison for JSON/JSONB columns
-    if metadata_column.type.__class__.__name__ in ('JSON', 'JSONB'):
+    if metadata_column.type.__class__.__name__ in ("JSON", "JSONB"):
         return False
 
     # Use default comparison for other types
