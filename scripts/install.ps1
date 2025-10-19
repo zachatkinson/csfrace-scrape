@@ -8,6 +8,27 @@ Write-Host " CSFrace Scrape - Installation" -ForegroundColor Cyan
 Write-Host "=================================" -ForegroundColor Cyan
 Write-Host ""
 
+# Check PowerShell version - require 7+
+if ($PSVersionTable.PSVersion.Major -lt 7) {
+    Write-Host "Error: PowerShell 7 or higher is required" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Current version: $($PSVersionTable.PSVersion)" -ForegroundColor Yellow
+    Write-Host "Required version: 7.0 or higher" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Please install PowerShell 7:" -ForegroundColor Cyan
+    Write-Host "  https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell-on-windows?view=powershell-7.5" -ForegroundColor White
+    Write-Host ""
+    Write-Host "Quick install options:" -ForegroundColor Cyan
+    Write-Host "  - Winget: winget install Microsoft.PowerShell" -ForegroundColor Gray
+    Write-Host "  - MSI Installer: Download from the link above" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "After installing, run this script again from PowerShell 7" -ForegroundColor Cyan
+    exit 1
+}
+
+Write-Host "OK: PowerShell $($PSVersionTable.PSVersion) detected" -ForegroundColor Green
+Write-Host ""
+
 # Check for existing data volumes
 $existingVolumes = (docker volume ls --filter "name=csfrace-scrape" --format "{{.Name}}" | Measure-Object -Line).Lines
 
@@ -77,54 +98,40 @@ if (!$certsValid) {
     Write-Host " Generating SSL certificates using PowerShell..." -ForegroundColor Cyan
 
     try {
-        # Create self-signed certificate using PowerShell (no OpenSSL required!)
-        $certParams = @{
-            Subject = "CN=localhost"
-            DnsName = @("localhost", "*.localhost", "127.0.0.1")
-            CertStoreLocation = "Cert:\CurrentUser\My"
-            KeyExportPolicy = "Exportable"
-            KeySpec = "Signature"
-            KeyLength = 2048
-            KeyAlgorithm = "RSA"
-            HashAlgorithm = "SHA256"
-            NotAfter = (Get-Date).AddDays(365)
-        }
+        # Generate self-signed certificate using PowerShell 7+ (.NET Core)
+        $cert = New-SelfSignedCertificate `
+            -Subject "CN=localhost" `
+            -DnsName @("localhost", "*.localhost") `
+            -CertStoreLocation "Cert:\CurrentUser\My" `
+            -KeyExportPolicy Exportable `
+            -KeySpec Signature `
+            -KeyLength 2048 `
+            -KeyAlgorithm RSA `
+            -HashAlgorithm SHA256 `
+            -NotAfter (Get-Date).AddDays(365)
 
-        # Generate certificate
-        $cert = New-SelfSignedCertificate @certParams
-
-        # Export certificate to PEM format for nginx
+        # Export certificate to PEM format
         $certPath = "$sslDir\localhost.crt"
-        $keyPath = "$sslDir\localhost.key"
-        $pfxPath = "$sslDir\localhost.pfx"
-        $pfxPassword = ConvertTo-SecureString -String "temp" -Force -AsPlainText
-
-        # Export to PFX first
-        Export-PfxCertificate -Cert $cert -FilePath $pfxPath -Password $pfxPassword | Out-Null
-
-        # Convert PFX to PEM using PowerShell
-        $pfxCert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($pfxPath, $pfxPassword, "Exportable")
-
-        # Export certificate (public key)
         $certPem = "-----BEGIN CERTIFICATE-----`n"
-        $certPem += [Convert]::ToBase64String($pfxCert.RawData, "InsertLineBreaks")
+        $certPem += [Convert]::ToBase64String($cert.RawData, "InsertLineBreaks")
         $certPem += "`n-----END CERTIFICATE-----"
         $certPem | Out-File -FilePath $certPath -Encoding ASCII
 
-        # Export private key
-        $rsa = [System.Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPrivateKey($pfxCert)
+        # Export private key to PEM format using PowerShell 7 method
+        $keyPath = "$sslDir\localhost.key"
+        $rsa = [System.Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPrivateKey($cert)
         $keyBytes = $rsa.ExportRSAPrivateKey()
         $keyPem = "-----BEGIN RSA PRIVATE KEY-----`n"
         $keyPem += [Convert]::ToBase64String($keyBytes, "InsertLineBreaks")
         $keyPem += "`n-----END RSA PRIVATE KEY-----"
         $keyPem | Out-File -FilePath $keyPath -Encoding ASCII
 
-        # Clean up temporary PFX file
-        Remove-Item $pfxPath -Force -ErrorAction SilentlyContinue
+        # Clean up certificate from personal store
+        Remove-Item "Cert:\CurrentUser\My\$($cert.Thumbprint)" -Force -ErrorAction SilentlyContinue
 
         Write-Host "OK: SSL certificates generated" -ForegroundColor Green
 
-        # Try to add to Windows certificate store
+        # Try to add to Windows certificate store for trusted HTTPS
         try {
             $store = New-Object System.Security.Cryptography.X509Certificates.X509Store("Root", "LocalMachine")
             $store.Open("ReadWrite")
@@ -138,12 +145,9 @@ if (!$certsValid) {
 
             $store.Close()
         } catch {
-            Write-Host "Info:  Note: Certificate not added to Windows store (requires admin privileges)" -ForegroundColor Cyan
+            Write-Host "Info: Certificate not added to Windows store (requires admin privileges)" -ForegroundColor Cyan
             Write-Host "   You can add it manually later for trusted HTTPS access" -ForegroundColor Gray
         }
-
-        # Remove certificate from personal store
-        Remove-Item "Cert:\CurrentUser\My\$($cert.Thumbprint)" -Force -ErrorAction SilentlyContinue
 
     } catch {
         Write-Host "Error: Failed to generate certificates: $_" -ForegroundColor Red
