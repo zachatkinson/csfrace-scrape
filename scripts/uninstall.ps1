@@ -4,10 +4,10 @@
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "🗑️  CSFrace Scrape - Uninstallation" -ForegroundColor Cyan
-Write-Host "====================================" -ForegroundColor Cyan
+Write-Host " CSFrace Scrape - Uninstallation" -ForegroundColor Cyan
+Write-Host "=====================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "⚠️  This will remove:" -ForegroundColor Yellow
+Write-Host "WARNING: This will remove:" -ForegroundColor Yellow
 Write-Host "   - All containers"
 Write-Host "   - All Docker images"
 Write-Host "   - Build cache"
@@ -15,14 +15,14 @@ Write-Host ""
 
 if ($env:SKIP_PROMPTS -eq "1") {
     $deleteData = "no"
-    Write-Host "ℹ️  Data will be preserved (non-interactive mode)" -ForegroundColor Cyan
+    Write-Host "Info: Data will be preserved (non-interactive mode)" -ForegroundColor Cyan
     Write-Host ""
 } else {
     $deleteData = Read-Host "DELETE all data (database, metrics, etc.)? [y/N]"
     Write-Host ""
 
     if ($deleteData -match "^[Yy]$") {
-        Write-Host "⚠️  WARNING: This will permanently delete:" -ForegroundColor Red
+        Write-Host "WARNING: This will permanently delete:" -ForegroundColor Red
         Write-Host "   - All database data"
         Write-Host "   - Redis cache"
         Write-Host "   - Grafana dashboards and settings"
@@ -32,40 +32,44 @@ if ($env:SKIP_PROMPTS -eq "1") {
         $confirmDelete = Read-Host "Are you ABSOLUTELY SURE? [y/N]"
         Write-Host ""
 
-        if ($confirmDelete -notmatch "^[Yy]$") {
+        if ($confirmDelete -match "^[Yy]$") {
+            $deleteData = "yes"
+            Write-Host "OK: Will delete all data volumes" -ForegroundColor Yellow
+        } else {
             $deleteData = "no"
-            Write-Host "✓ Data will be preserved" -ForegroundColor Green
+            Write-Host "OK: Data will be preserved" -ForegroundColor Green
         }
     } else {
-        Write-Host "✓ Data will be preserved for next installation" -ForegroundColor Green
+        $deleteData = "no"
+        Write-Host "OK: Data will be preserved for next installation" -ForegroundColor Green
     }
 }
 
 Write-Host ""
-Write-Host "🛑 Stopping all services..." -ForegroundColor Yellow
+Write-Host " Stopping all services..." -ForegroundColor Yellow
 docker compose down
 
 if ($deleteData -eq "yes") {
-    Write-Host "🗑️  Removing volumes and all data..." -ForegroundColor Yellow
+    Write-Host " Removing volumes and all data..." -ForegroundColor Yellow
     docker compose down -v
 } else {
-    Write-Host "✓ Keeping volumes (data preserved)" -ForegroundColor Green
+    Write-Host "OK: Keeping volumes (data preserved)" -ForegroundColor Green
 }
 
-Write-Host "🗑️  Removing Docker images..." -ForegroundColor Yellow
+Write-Host " Removing Docker images..." -ForegroundColor Yellow
 try {
     docker rmi csfrace-scrape-backend csfrace-scrape-frontend 2>$null
 } catch {
     Write-Host "   (Images already removed)" -ForegroundColor Gray
 }
 
-Write-Host "🗑️  Removing build cache..." -ForegroundColor Yellow
+Write-Host " Removing build cache..." -ForegroundColor Yellow
 docker builder prune -f
 
-Write-Host "🗑️  Removing SSL certificate files..." -ForegroundColor Yellow
+Write-Host " Removing SSL certificate files..." -ForegroundColor Yellow
 if (Test-Path "nginx\ssl") {
     Remove-Item -Recurse -Force "nginx\ssl"
-    Write-Host "   ✓ SSL certificate files removed" -ForegroundColor Green
+    Write-Host "OK: SSL certificate files removed" -ForegroundColor Green
 } else {
     Write-Host "   (No SSL certificate files found)" -ForegroundColor Gray
 }
@@ -73,24 +77,24 @@ if (Test-Path "nginx\ssl") {
 # Check for output directory
 if (Test-Path "output") {
     if ($env:SKIP_PROMPTS -eq "1") {
-        Write-Host "ℹ️  Output files preserved (non-interactive mode)" -ForegroundColor Cyan
+        Write-Host "Info: Output files preserved (non-interactive mode)" -ForegroundColor Cyan
     } else {
         Write-Host ""
         $deleteOutput = Read-Host "DELETE output files (scraped content)? [y/N]"
         Write-Host ""
 
         if ($deleteOutput -match "^[Yy]$") {
-            Write-Host "🗑️  Removing output files..." -ForegroundColor Yellow
+            Write-Host " Removing output files..." -ForegroundColor Yellow
             Remove-Item -Recurse -Force "output"
-            Write-Host "   ✓ Output files removed" -ForegroundColor Green
+            Write-Host "OK: Output files removed" -ForegroundColor Green
         } else {
-            Write-Host "   ✓ Output files preserved" -ForegroundColor Green
+            Write-Host "OK: Output files preserved" -ForegroundColor Green
         }
     }
 }
 
 Write-Host ""
-Write-Host "✅ Uninstallation complete!" -ForegroundColor Green
+Write-Host "OK: Uninstallation complete!" -ForegroundColor Green
 Write-Host ""
 Write-Host "Note: The following were NOT removed:" -ForegroundColor Yellow
 Write-Host "   - Source code in this directory"
