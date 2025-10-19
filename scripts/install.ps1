@@ -94,32 +94,31 @@ if (!$certsValid) {
     # Generate private key
     & openssl genrsa -out "$sslDir\localhost.key" 2048 2>$null
 
-    # Create certificate config file directly
+    # Create certificate config file
     $configPath = "$sslDir\localhost.cnf"
-    $configLines = @(
-        "[req]",
-        "default_bits = 2048",
-        "prompt = no",
-        "default_md = sha256",
-        "distinguished_name = dn",
-        "req_extensions = v3_req",
-        "",
-        "[dn]",
-        "C=US",
-        "ST=CA",
-        "L=SF",
-        "O=Dev",
-        "CN=localhost",
-        "",
-        "[v3_req]",
-        "subjectAltName = @alt_names",
-        "",
-        "[alt_names]",
-        "DNS.1 = localhost",
-        "DNS.2 = *.localhost",
-        "IP.1 = 127.0.0.1"
-    )
-    $configLines -join "`n" | Out-File -FilePath $configPath -Encoding ASCII
+
+    # Write config file line by line to avoid here-string issues
+    "[req]" | Out-File -FilePath $configPath -Encoding ASCII
+    "default_bits = 2048" | Out-File -FilePath $configPath -Append -Encoding ASCII
+    "prompt = no" | Out-File -FilePath $configPath -Append -Encoding ASCII
+    "default_md = sha256" | Out-File -FilePath $configPath -Append -Encoding ASCII
+    "distinguished_name = dn" | Out-File -FilePath $configPath -Append -Encoding ASCII
+    "req_extensions = v3_req" | Out-File -FilePath $configPath -Append -Encoding ASCII
+    "" | Out-File -FilePath $configPath -Append -Encoding ASCII
+    "[dn]" | Out-File -FilePath $configPath -Append -Encoding ASCII
+    "C=US" | Out-File -FilePath $configPath -Append -Encoding ASCII
+    "ST=CA" | Out-File -FilePath $configPath -Append -Encoding ASCII
+    "L=SF" | Out-File -FilePath $configPath -Append -Encoding ASCII
+    "O=Dev" | Out-File -FilePath $configPath -Append -Encoding ASCII
+    "CN=localhost" | Out-File -FilePath $configPath -Append -Encoding ASCII
+    "" | Out-File -FilePath $configPath -Append -Encoding ASCII
+    "[v3_req]" | Out-File -FilePath $configPath -Append -Encoding ASCII
+    "subjectAltName = @alt_names" | Out-File -FilePath $configPath -Append -Encoding ASCII
+    "" | Out-File -FilePath $configPath -Append -Encoding ASCII
+    "[alt_names]" | Out-File -FilePath $configPath -Append -Encoding ASCII
+    "DNS.1 = localhost" | Out-File -FilePath $configPath -Append -Encoding ASCII
+    "DNS.2 = *.localhost" | Out-File -FilePath $configPath -Append -Encoding ASCII
+    "IP.1 = 127.0.0.1" | Out-File -FilePath $configPath -Append -Encoding ASCII
 
     # Create certificate signing request
     & openssl req -new -key "$sslDir\localhost.key" `
