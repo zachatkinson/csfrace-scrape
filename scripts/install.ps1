@@ -229,7 +229,7 @@ Write-Host "   Grafana:     http://localhost:3001 (admin/admin)"
 Write-Host "   Prometheus:  http://localhost:9090"
 Write-Host ""
 
-if ($certsValid) {
+if ($certsValid -eq $true) {
     Write-Host "🔒 HTTPS is configured and ready to use!" -ForegroundColor Green
 } else {
     Write-Host "🔒 HTTPS certificates generated" -ForegroundColor Green
