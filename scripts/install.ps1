@@ -1,4 +1,4 @@
-# Simple one-command installation script for Windows
+﻿# Simple one-command installation script for Windows
 # Usage: .\scripts\install.ps1
 # Non-interactive mode: $env:SKIP_PROMPTS="1"; .\scripts\install.ps1
 
