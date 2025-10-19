@@ -37,12 +37,17 @@ See the [Permission Issues & Script Execution](#permission-issues--script-execut
 
 ### Required Software
 
-1. **Docker Desktop for Windows**
+1. **PowerShell 7 or higher**
+   - Download: [Installing PowerShell on Windows](https://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell-on-windows?view=powershell-7.5)
+   - **Quick install**: `winget install Microsoft.PowerShell`
+   - **Note**: Windows comes with PowerShell 5.1 by default - you need to upgrade to PowerShell 7+
+
+2. **Docker Desktop for Windows**
    - Download: [Docker Desktop for Windows](https://www.docker.com/products/docker-desktop/)
    - **Minimum version**: Docker 24.0+, Docker Compose 2.20+
    - Requires **WSL 2** (Windows Subsystem for Linux 2)
 
-2. **WSL 2**
+3. **WSL 2**
    - Required by Docker Desktop
    - Installation instructions below
 
