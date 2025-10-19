@@ -4,7 +4,7 @@
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "🚀 CSFrace Scrape - Installation" -ForegroundColor Cyan
+Write-Host " CSFrace Scrape - Installation" -ForegroundColor Cyan
 Write-Host "=================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -13,24 +13,24 @@ $existingVolumes = (docker volume ls --filter "name=csfrace-scrape" --format "{{
 
 if ($existingVolumes -gt 0) {
     if ($env:SKIP_PROMPTS -eq "1") {
-        Write-Host "ℹ️  Existing data found - preserving (non-interactive mode)" -ForegroundColor Cyan
+        Write-Host "Info:  Existing data found - preserving (non-interactive mode)" -ForegroundColor Cyan
         Write-Host ""
     } else {
-        Write-Host "ℹ️  Existing data found from previous installation" -ForegroundColor Cyan
+        Write-Host "Info:  Existing data found from previous installation" -ForegroundColor Cyan
         Write-Host ""
         $startFresh = Read-Host "Start FRESH (delete existing data)? [y/N]"
         Write-Host ""
 
         if ($startFresh -match "^[Yy]$") {
-            Write-Host "🗑️  Removing existing data volumes..." -ForegroundColor Yellow
+            Write-Host "  Removing existing data volumes..." -ForegroundColor Yellow
             try {
                 docker compose down -v 2>$null
             } catch {
                 # Ignore errors if services aren't running
             }
-            Write-Host "✓ Starting with fresh database" -ForegroundColor Green
+            Write-Host "OK: Starting with fresh database" -ForegroundColor Green
         } else {
-            Write-Host "✓ Preserving existing data" -ForegroundColor Green
+            Write-Host "OK: Preserving existing data" -ForegroundColor Green
         }
         Write-Host ""
     }
@@ -38,17 +38,17 @@ if ($existingVolumes -gt 0) {
 
 # Check if .env exists
 if (!(Test-Path .env)) {
-    Write-Host "📝 Creating .env file from template..." -ForegroundColor Yellow
+    Write-Host " Creating .env file from template..." -ForegroundColor Yellow
     Copy-Item .env.example .env
-    Write-Host "✅ .env created" -ForegroundColor Green
+    Write-Host "OK: .env created" -ForegroundColor Green
 } else {
-    Write-Host "✅ .env already exists" -ForegroundColor Green
+    Write-Host "OK: .env already exists" -ForegroundColor Green
 }
 
 Write-Host ""
 
 # Create SSL certificates for nginx (required before starting containers)
-Write-Host "🔒 Setting up HTTPS certificates..." -ForegroundColor Yellow
+Write-Host " Setting up HTTPS certificates..." -ForegroundColor Yellow
 $sslDir = "nginx\ssl"
 if (!(Test-Path $sslDir)) {
     New-Item -ItemType Directory -Path $sslDir -Force | Out-Null
@@ -64,12 +64,12 @@ if ($certsExist) {
         $daysUntilExpiry = ($cert.NotAfter - (Get-Date)).Days
         if ($daysUntilExpiry -gt 30) {
             $certsValid = $true
-            Write-Host "✅ Valid SSL certificates found (expires in $daysUntilExpiry days)" -ForegroundColor Green
+            Write-Host "OK: Valid SSL certificates found (expires in $daysUntilExpiry days)" -ForegroundColor Green
         } else {
-            Write-Host "⚠️  SSL certificates expire soon ($daysUntilExpiry days) - regenerating..." -ForegroundColor Yellow
+            Write-Host "Warning:  SSL certificates expire soon ($daysUntilExpiry days) - regenerating..." -ForegroundColor Yellow
         }
     } catch {
-        Write-Host "⚠️  Existing certificates are invalid - regenerating..." -ForegroundColor Yellow
+        Write-Host "Warning:  Existing certificates are invalid - regenerating..." -ForegroundColor Yellow
     }
 }
 
@@ -78,7 +78,7 @@ if (!$certsValid) {
     $opensslPath = Get-Command openssl -ErrorAction SilentlyContinue
 
     if (!$opensslPath) {
-        Write-Host "❌ OpenSSL not found - required for HTTPS certificates" -ForegroundColor Red
+        Write-Host "Error: OpenSSL not found - required for HTTPS certificates" -ForegroundColor Red
         Write-Host ""
         Write-Host "Options to install OpenSSL on Windows:" -ForegroundColor Yellow
         Write-Host "1. Using Chocolatey: choco install openssl" -ForegroundColor White
@@ -89,7 +89,7 @@ if (!$certsValid) {
         exit 1
     }
 
-    Write-Host "📝 Generating SSL certificates..." -ForegroundColor Cyan
+    Write-Host " Generating SSL certificates..." -ForegroundColor Cyan
 
     # Generate private key
     & openssl genrsa -out "$sslDir\localhost.key" 2048 2>$null
@@ -138,7 +138,7 @@ if (!$certsValid) {
     Remove-Item $configPath -Force -ErrorAction SilentlyContinue
     Remove-Item "$sslDir\localhost.csr" -Force -ErrorAction SilentlyContinue
 
-    Write-Host "✅ SSL certificates generated" -ForegroundColor Green
+    Write-Host "OK: SSL certificates generated" -ForegroundColor Green
 
     # Try to add to Windows certificate store
     try {
@@ -150,18 +150,18 @@ if (!$certsValid) {
 
         if (!$existingCerts) {
             $store.Add($cert)
-            Write-Host "✅ Certificate added to Windows Trusted Root store" -ForegroundColor Green
+            Write-Host "OK: Certificate added to Windows Trusted Root store" -ForegroundColor Green
         }
 
         $store.Close()
     } catch {
-        Write-Host "ℹ️  Note: Certificate not added to Windows store (requires admin privileges)" -ForegroundColor Cyan
+        Write-Host "Info:  Note: Certificate not added to Windows store (requires admin privileges)" -ForegroundColor Cyan
         Write-Host "   You can add it manually later for trusted HTTPS access" -ForegroundColor Gray
     }
 }
 
 Write-Host ""
-Write-Host "🔨 Building Docker images..." -ForegroundColor Yellow
+Write-Host " Building Docker images..." -ForegroundColor Yellow
 Write-Host "   (First time: 5-10 minutes, subsequent starts are instant)" -ForegroundColor Gray
 Write-Host ""
 
@@ -169,11 +169,11 @@ Write-Host ""
 docker compose build
 
 Write-Host ""
-Write-Host "🚢 Starting services..." -ForegroundColor Yellow
+Write-Host " Starting services..." -ForegroundColor Yellow
 docker compose up -d
 
 Write-Host ""
-Write-Host "⏳ Waiting for services to be healthy..." -ForegroundColor Yellow
+Write-Host " Waiting for services to be healthy..." -ForegroundColor Yellow
 
 # Wait for backend health
 $maxAttempts = 30
@@ -181,7 +181,7 @@ for ($i = 1; $i -le $maxAttempts; $i++) {
     try {
         $response = Invoke-RestMethod -Uri "http://localhost:8000/health/" -TimeoutSec 2 -ErrorAction SilentlyContinue
         if ($response.status -eq "healthy") {
-            Write-Host "✅ Backend is healthy" -ForegroundColor Green
+            Write-Host "OK: Backend is healthy" -ForegroundColor Green
             break
         }
     } catch {
@@ -189,7 +189,7 @@ for ($i = 1; $i -le $maxAttempts; $i++) {
     }
 
     if ($i -eq $maxAttempts) {
-        Write-Host "❌ Backend did not become healthy" -ForegroundColor Red
+        Write-Host "Error: Backend did not become healthy" -ForegroundColor Red
         Write-Host "Check logs with: docker compose logs backend" -ForegroundColor Yellow
         exit 1
     }
@@ -201,7 +201,7 @@ for ($i = 1; $i -le $maxAttempts; $i++) {
     try {
         $response = Invoke-WebRequest -Uri "http://localhost:3000/" -TimeoutSec 2 -UseBasicParsing -ErrorAction SilentlyContinue
         if ($response.StatusCode -eq 200) {
-            Write-Host "✅ Frontend is healthy" -ForegroundColor Green
+            Write-Host "OK: Frontend is healthy" -ForegroundColor Green
             break
         }
     } catch {
@@ -209,7 +209,7 @@ for ($i = 1; $i -le $maxAttempts; $i++) {
     }
 
     if ($i -eq $maxAttempts) {
-        Write-Host "❌ Frontend did not become healthy" -ForegroundColor Red
+        Write-Host "Error: Frontend did not become healthy" -ForegroundColor Red
         Write-Host "Check logs with: docker compose logs frontend" -ForegroundColor Yellow
         exit 1
     }
@@ -217,9 +217,9 @@ for ($i = 1; $i -le $maxAttempts; $i++) {
 }
 
 Write-Host ""
-Write-Host "✅ Installation complete!" -ForegroundColor Green
+Write-Host "OK: Installation complete!" -ForegroundColor Green
 Write-Host ""
-Write-Host "📍 Service URLs:" -ForegroundColor Cyan
+Write-Host " Service URLs:" -ForegroundColor Cyan
 Write-Host "   Frontend:    https://localhost (recommended)"
 Write-Host "   Backend API: https://localhost/api"
 Write-Host "   API Docs:    https://localhost/docs"
@@ -228,11 +228,11 @@ Write-Host "   Prometheus:  http://localhost:9090"
 Write-Host ""
 
 if ($certsValid -eq $true) {
-    Write-Host "🔒 HTTPS is configured and ready to use!" -ForegroundColor Green
+    Write-Host " HTTPS is configured and ready to use!" -ForegroundColor Green
 } else {
-    Write-Host "🔒 HTTPS certificates generated" -ForegroundColor Green
+    Write-Host " HTTPS certificates generated" -ForegroundColor Green
     Write-Host "   Note: Your browser may show a security warning for self-signed certificates" -ForegroundColor Gray
 }
 
 Write-Host ""
-Write-Host "🎉 Ready to use!" -ForegroundColor Green
+Write-Host " Ready to use!" -ForegroundColor Green
