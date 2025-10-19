@@ -94,33 +94,32 @@ if (!$certsValid) {
     # Generate private key
     & openssl genrsa -out "$sslDir\localhost.key" 2048 2>$null
 
-    # Create certificate config
-    $configContent = @'
-[req]
-default_bits = 2048
-prompt = no
-default_md = sha256
-distinguished_name = dn
-req_extensions = v3_req
-
-[dn]
-C=US
-ST=CA
-L=SF
-O=Dev
-CN=localhost
-
-[v3_req]
-subjectAltName = @alt_names
-
-[alt_names]
-DNS.1 = localhost
-DNS.2 = *.localhost
-IP.1 = 127.0.0.1
-'@
-
+    # Create certificate config file directly
     $configPath = "$sslDir\localhost.cnf"
-    $configContent | Out-File -FilePath $configPath -Encoding ASCII
+    $configLines = @(
+        "[req]",
+        "default_bits = 2048",
+        "prompt = no",
+        "default_md = sha256",
+        "distinguished_name = dn",
+        "req_extensions = v3_req",
+        "",
+        "[dn]",
+        "C=US",
+        "ST=CA",
+        "L=SF",
+        "O=Dev",
+        "CN=localhost",
+        "",
+        "[v3_req]",
+        "subjectAltName = @alt_names",
+        "",
+        "[alt_names]",
+        "DNS.1 = localhost",
+        "DNS.2 = *.localhost",
+        "IP.1 = 127.0.0.1"
+    )
+    $configLines -join "`n" | Out-File -FilePath $configPath -Encoding ASCII
 
     # Create certificate signing request
     & openssl req -new -key "$sslDir\localhost.key" `
