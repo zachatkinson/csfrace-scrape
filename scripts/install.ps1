@@ -29,6 +29,27 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
 Write-Host "OK: PowerShell $($PSVersionTable.PSVersion) detected" -ForegroundColor Green
 Write-Host ""
 
+# Check if running as Administrator
+$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
+if (-not $isAdmin) {
+    Write-Host "Error: Administrator privileges required" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "This installer needs Administrator privileges to:" -ForegroundColor Yellow
+    Write-Host "  - Add SSL certificates to Windows Trusted Root store" -ForegroundColor Gray
+    Write-Host "  - Ensure Docker has necessary permissions" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "Please run PowerShell as Administrator:" -ForegroundColor Cyan
+    Write-Host "  1. Right-click PowerShell icon" -ForegroundColor White
+    Write-Host "  2. Select 'Run as Administrator'" -ForegroundColor White
+    Write-Host "  3. Navigate to this directory and run the script again" -ForegroundColor White
+    Write-Host ""
+    exit 1
+}
+
+Write-Host "OK: Running with Administrator privileges" -ForegroundColor Green
+Write-Host ""
+
 # Check for existing data volumes
 $existingVolumes = (docker volume ls --filter "name=csfrace-scrape" --format "{{.Name}}" | Measure-Object -Line).Lines
 

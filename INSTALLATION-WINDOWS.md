@@ -8,12 +8,14 @@ All PowerShell scripts in this project are unsigned. Before running any `.ps1` s
 
 ### Available PowerShell Scripts
 
-| Script | Purpose | Usage |
-|--------|---------|-------|
-| `.\scripts\install.ps1` | Automated installation | Sets up everything automatically |
-| `.\scripts\uninstall.ps1` | Automated uninstallation | Removes containers, images, and optionally data |
-| `.\create-https-cert.ps1` | Generate SSL certificates | Creates HTTPS certificates (optional - install script does this) |
-| `.\scripts\remove-localhost-cert.ps1` | Remove SSL certificate | Removes certificate from Windows certificate store |
+**IMPORTANT**: All scripts should be run as Administrator (right-click PowerShell → "Run as Administrator")
+
+| Script | Purpose | Requires Admin |
+|--------|---------|----------------|
+| `.\scripts\install.ps1` | Automated installation | **Yes** - Adds SSL certificates to system trust store |
+| `.\scripts\uninstall.ps1` | Automated uninstallation | No - But recommended for cleanup |
+| `.\create-https-cert.ps1` | Generate SSL certificates | **Yes** - Adds to system trust store (optional - install does this) |
+| `.\scripts\remove-localhost-cert.ps1` | Remove SSL certificate | **Yes** - Removes from system trust store |
 
 ### Unblocking Scripts
 
@@ -92,32 +94,23 @@ wsl --set-default-version 2
    - Select **Extract All...**
    - Click **Extract** (it will create a folder on your Desktop)
 
-3. **Run the installer**:
+3. **Run the installer as Administrator**:
 
-   **Option A - Using File Explorer (Easiest)**:
-   - Open PowerShell in the extracted folder:
-     - Open the `csfrace-scrape-master` folder
-     - Hold **Shift** and right-click inside the folder
-     - Select **Open PowerShell window here**
-   - Run these commands:
-     ```powershell
-     # Unblock the script (required for unsigned scripts)
-     Unblock-File -Path .\scripts\install.ps1
+   **IMPORTANT**: The installer requires Administrator privileges to add SSL certificates to your system's trust store.
 
-     # Run the installer
-     .\scripts\install.ps1
-     ```
+   - Open PowerShell as Administrator:
+     - Press `Win + X` and select **Windows PowerShell (Admin)** or **Terminal (Admin)**
+     - Or: Right-click the PowerShell icon and select **Run as Administrator**
 
-   **Option B - If Option A doesn't work**:
-   - Open PowerShell as Administrator
    - Navigate to the extracted folder:
      ```powershell
      cd "$env:USERPROFILE\Desktop\csfrace-scrape-master"
      ```
-   - Run:
+
+   - Unblock and run the installer:
      ```powershell
-     # Set execution policy for current session
-     Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
+     # Unblock the script (required for unsigned scripts)
+     Unblock-File -Path .\scripts\install.ps1
 
      # Run the installer
      .\scripts\install.ps1
