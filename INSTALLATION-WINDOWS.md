@@ -2,6 +2,37 @@
 
 Complete installation guide for Windows 10/11.
 
+## Running PowerShell Scripts on Windows
+
+All PowerShell scripts in this project are unsigned. Before running any `.ps1` script, you need to unblock it.
+
+### Available PowerShell Scripts
+
+| Script | Purpose | Usage |
+|--------|---------|-------|
+| `.\scripts\install.ps1` | Automated installation | Sets up everything automatically |
+| `.\scripts\uninstall.ps1` | Automated uninstallation | Removes containers, images, and optionally data |
+| `.\create-https-cert.ps1` | Generate SSL certificates | Creates HTTPS certificates (optional - install script does this) |
+| `.\scripts\remove-localhost-cert.ps1` | Remove SSL certificate | Removes certificate from Windows certificate store |
+
+### Unblocking Scripts
+
+```powershell
+# Unblock a specific script (recommended)
+Unblock-File -Path .\scripts\install.ps1
+
+# Or unblock all scripts at once
+Get-ChildItem -Path .\scripts -Filter "*.ps1" | Unblock-File
+Get-ChildItem -Path . -Filter "*.ps1" | Unblock-File
+```
+
+**Alternative**: Set execution policy for current session (temporary):
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
+```
+
+See the [Permission Issues & Script Execution](#permission-issues--script-execution) section for more options.
+
 ## Prerequisites
 
 ### Required Software
@@ -57,20 +88,51 @@ wsl --set-default-version 2
    - Click **Extract** (it will create a folder on your Desktop)
 
 3. **Run the installer**:
-   - Open the extracted folder: `csfrace-scrape-master`
-   - Right-click on **`install.ps1`** (in the `scripts` folder)
-   - Select **Run with PowerShell**
-   - If prompted, allow the script to run
+
+   **Option A - Using File Explorer (Easiest)**:
+   - Open PowerShell in the extracted folder:
+     - Open the `csfrace-scrape-master` folder
+     - Hold **Shift** and right-click inside the folder
+     - Select **Open PowerShell window here**
+   - Run these commands:
+     ```powershell
+     # Unblock the script (required for unsigned scripts)
+     Unblock-File -Path .\scripts\install.ps1
+
+     # Run the installer
+     .\scripts\install.ps1
+     ```
+
+   **Option B - If Option A doesn't work**:
+   - Open PowerShell as Administrator
+   - Navigate to the extracted folder:
+     ```powershell
+     cd "$env:USERPROFILE\Desktop\csfrace-scrape-master"
+     ```
+   - Run:
+     ```powershell
+     # Set execution policy for current session
+     Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
+
+     # Run the installer
+     .\scripts\install.ps1
+     ```
 
 The automated script will:
 1. ✅ Clean up any existing containers and volumes
 2. ✅ Create fresh environment configuration
-3. ✅ Build Docker images (5-10 minutes)
-4. ✅ Start all services
-5. ✅ Run health checks
-6. ✅ Verify everything works
+3. ✅ Generate HTTPS certificates (requires OpenSSL)
+4. ✅ Build Docker images (5-10 minutes)
+5. ✅ Start all services
+6. ✅ Run health checks
+7. ✅ Verify everything works
 
-**That's it!** The script handles everything automatically.
+**That's it!** The script handles everything automatically, including HTTPS setup.
+
+**Note**: The installer requires OpenSSL for HTTPS certificates. Install it with:
+- Chocolatey: `choco install openssl`
+- Winget: `winget install --id=ShiningLight.OpenSSL`
+- Or download from: https://slproweb.com/products/Win32OpenSSL.html
 
 ## Manual Installation
 
@@ -137,11 +199,16 @@ docker compose up -d
 docker compose logs -f
 ```
 
-### Step 6: Setup HTTPS (Recommended)
+### Step 6: Setup HTTPS (Optional)
+
+**Note**: If you used the automated installer (Quick Start), HTTPS certificates were already created. This step is only needed if you're doing a manual installation or want to regenerate certificates.
 
 For secure local development and OAuth support:
 
 ```powershell
+# Unblock the script (required for unsigned scripts)
+Unblock-File -Path .\create-https-cert.ps1
+
 # Generate self-signed SSL certificates
 .\create-https-cert.ps1
 
@@ -156,11 +223,12 @@ The script will:
 - Enable HTTPS access at https://localhost
 
 **Important Notes:**
+- **Script Execution**: You may need to run `Unblock-File -Path .\create-https-cert.ps1` before running the script (see Permission Issues section)
 - Certificates are **shared across projects** and persist after uninstall
 - Existing valid certificates are automatically reused
 - Certificates expire after 365 days (script will notify you)
 - You may need to run PowerShell as Administrator for certificate installation
-- To remove the certificate from your system: `.\scripts\remove-localhost-cert.ps1`
+- To remove the certificate from your system: Run `Unblock-File -Path .\scripts\remove-localhost-cert.ps1` then `.\scripts\remove-localhost-cert.ps1`
 
 ### Step 7: Verify Installation
 
@@ -336,14 +404,50 @@ docker compose up -d
 docker compose logs -f
 ```
 
-### Permission Issues
+### Permission Issues & Script Execution
 
+If you get errors running PowerShell scripts (e.g., "cannot be loaded because running scripts is disabled"):
+
+**Method 1 - Unblock Downloaded Scripts (Recommended)**:
 ```powershell
-# Run PowerShell as Administrator
-# Right-click PowerShell icon → Run as Administrator
+# Unblock specific script files
+Unblock-File -Path .\scripts\install.ps1
+Unblock-File -Path .\create-https-cert.ps1
 
-# Fix script execution policy (if needed)
+# Or unblock all PowerShell scripts in the folder
+Get-ChildItem -Path . -Recurse -Filter "*.ps1" | Unblock-File
+
+# Then run the script normally
+.\scripts\install.ps1
+```
+
+**Method 2 - Temporary Execution Policy Bypass**:
+```powershell
+# Bypass execution policy for current session only (safest)
+Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
+
+# Then run the script
+.\scripts\install.ps1
+```
+
+**Method 3 - Set User-Level Execution Policy**:
+```powershell
+# Set execution policy for current user (persists across sessions)
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+# Then run the script
+.\scripts\install.ps1
+```
+
+**Method 4 - Run PowerShell as Administrator** (if above methods fail):
+```powershell
+# Right-click PowerShell icon → Run as Administrator
+# Navigate to project folder
+cd "$env:USERPROFILE\Desktop\csfrace-scrape-master"
+
+# Set execution policy and run
+Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
+.\scripts\install.ps1
 ```
 
 ### Build Failures
@@ -464,7 +568,29 @@ docker compose -f docker-compose.prod.yml up -d
 
 ## Uninstalling
 
-### Complete Removal
+### Automated Uninstall (Recommended)
+
+```powershell
+# Unblock the script (required for unsigned scripts)
+Unblock-File -Path .\scripts\uninstall.ps1
+
+# Run the uninstall script
+.\scripts\uninstall.ps1
+```
+
+The script will:
+- Stop all Docker containers
+- Remove Docker images and build cache
+- Ask if you want to delete data volumes (optional)
+- Ask if you want to delete output files (optional)
+- Remove SSL certificate files
+- Preserve Windows certificate store entries (shared across projects)
+
+**Note**: The script preserves `.env`, source code, and shared certificates by default.
+
+### Manual Complete Removal
+
+If you prefer to manually remove everything:
 
 ```powershell
 # Stop and remove everything
@@ -478,6 +604,13 @@ docker volume rm csfrace-scrape_postgres-data
 docker volume rm csfrace-scrape_redis-data
 docker volume rm csfrace-scrape_grafana-data
 docker volume rm csfrace-scrape_prometheus-data
+
+# Remove SSL certificate files
+Remove-Item -Recurse -Force nginx\ssl
+
+# Remove SSL certificate from Windows store (optional)
+Unblock-File -Path .\scripts\remove-localhost-cert.ps1
+.\scripts\remove-localhost-cert.ps1
 
 # Remove repository
 cd ..

@@ -46,6 +46,123 @@ if (!(Test-Path .env)) {
 }
 
 Write-Host ""
+
+# Create SSL certificates for nginx (required before starting containers)
+Write-Host "🔒 Setting up HTTPS certificates..." -ForegroundColor Yellow
+$sslDir = "nginx\ssl"
+if (!(Test-Path $sslDir)) {
+    New-Item -ItemType Directory -Path $sslDir -Force | Out-Null
+}
+
+# Check if certificates already exist and are valid
+$certsExist = (Test-Path "$sslDir\localhost.crt") -and (Test-Path "$sslDir\localhost.key")
+$certsValid = $false
+
+if ($certsExist) {
+    try {
+        $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2("$sslDir\localhost.crt")
+        $daysUntilExpiry = ($cert.NotAfter - (Get-Date)).Days
+        if ($daysUntilExpiry -gt 30) {
+            $certsValid = $true
+            Write-Host "✅ Valid SSL certificates found (expires in $daysUntilExpiry days)" -ForegroundColor Green
+        } else {
+            Write-Host "⚠️  SSL certificates expire soon ($daysUntilExpiry days) - regenerating..." -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host "⚠️  Existing certificates are invalid - regenerating..." -ForegroundColor Yellow
+    }
+}
+
+if (!$certsValid) {
+    # Check if OpenSSL is available
+    $opensslPath = Get-Command openssl -ErrorAction SilentlyContinue
+
+    if (!$opensslPath) {
+        Write-Host "❌ OpenSSL not found - required for HTTPS certificates" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "Options to install OpenSSL on Windows:" -ForegroundColor Yellow
+        Write-Host "1. Using Chocolatey: choco install openssl" -ForegroundColor White
+        Write-Host "2. Using Winget: winget install --id=ShiningLight.OpenSSL" -ForegroundColor White
+        Write-Host "3. Download from: https://slproweb.com/products/Win32OpenSSL.html" -ForegroundColor White
+        Write-Host ""
+        Write-Host "After installing OpenSSL, restart PowerShell and run this script again." -ForegroundColor Cyan
+        exit 1
+    }
+
+    Write-Host "📝 Generating SSL certificates..." -ForegroundColor Cyan
+
+    # Generate private key
+    & openssl genrsa -out "$sslDir\localhost.key" 2048 2>$null
+
+    # Create certificate config
+    $configContent = @"
+[req]
+default_bits = 2048
+prompt = no
+default_md = sha256
+distinguished_name = dn
+req_extensions = v3_req
+
+[dn]
+C=US
+ST=CA
+L=SF
+O=Dev
+CN=localhost
+
+[v3_req]
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = localhost
+DNS.2 = *.localhost
+IP.1 = 127.0.0.1
+"@
+
+    $configPath = "$sslDir\localhost.cnf"
+    $configContent | Out-File -FilePath $configPath -Encoding ASCII
+
+    # Create certificate signing request
+    & openssl req -new -key "$sslDir\localhost.key" `
+        -out "$sslDir\localhost.csr" `
+        -config $configPath 2>$null
+
+    # Generate self-signed certificate
+    & openssl x509 -req `
+        -in "$sslDir\localhost.csr" `
+        -signkey "$sslDir\localhost.key" `
+        -out "$sslDir\localhost.crt" `
+        -days 365 `
+        -extensions v3_req `
+        -extfile $configPath 2>$null
+
+    # Clean up temporary files
+    Remove-Item $configPath -Force -ErrorAction SilentlyContinue
+    Remove-Item "$sslDir\localhost.csr" -Force -ErrorAction SilentlyContinue
+
+    Write-Host "✅ SSL certificates generated" -ForegroundColor Green
+
+    # Try to add to Windows certificate store
+    try {
+        $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2("$sslDir\localhost.crt")
+        $store = New-Object System.Security.Cryptography.X509Certificates.X509Store("Root", "LocalMachine")
+        $store.Open("ReadWrite")
+
+        $existingCerts = $store.Certificates | Where-Object { $_.Subject -eq $cert.Subject -and $_.Thumbprint -eq $cert.Thumbprint }
+
+        if (!$existingCerts) {
+            $store.Add($cert)
+            Write-Host "✅ Certificate added to Windows Trusted Root store" -ForegroundColor Green
+        }
+
+        $store.Close()
+    } catch {
+        Write-Host "ℹ️  Note: Certificate not added to Windows store (requires admin privileges)" -ForegroundColor Cyan
+        Write-Host "   You can add it manually later for trusted HTTPS access" -ForegroundColor Gray
+    }
+}
+
+Write-Host ""
 Write-Host "🔨 Building Docker images..." -ForegroundColor Yellow
 Write-Host "   (First time: 5-10 minutes, subsequent starts are instant)" -ForegroundColor Gray
 Write-Host ""
@@ -105,12 +222,19 @@ Write-Host ""
 Write-Host "✅ Installation complete!" -ForegroundColor Green
 Write-Host ""
 Write-Host "📍 Service URLs:" -ForegroundColor Cyan
-Write-Host "   Frontend:    https://localhost"
+Write-Host "   Frontend:    https://localhost (recommended)"
 Write-Host "   Backend API: https://localhost/api"
 Write-Host "   API Docs:    https://localhost/docs"
 Write-Host "   Grafana:     http://localhost:3001 (admin/admin)"
 Write-Host "   Prometheus:  http://localhost:9090"
 Write-Host ""
-Write-Host "💡 Note: HTTPS requires SSL certificates. Run .\create-https-cert.ps1 to generate them." -ForegroundColor Yellow
+
+if ($certsValid) {
+    Write-Host "🔒 HTTPS is configured and ready to use!" -ForegroundColor Green
+} else {
+    Write-Host "🔒 HTTPS certificates generated" -ForegroundColor Green
+    Write-Host "   Note: Your browser may show a security warning for self-signed certificates" -ForegroundColor Gray
+}
+
 Write-Host ""
 Write-Host "🎉 Ready to use!" -ForegroundColor Green
