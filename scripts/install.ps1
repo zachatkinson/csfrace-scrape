@@ -74,89 +74,80 @@ if ($certsExist) {
 }
 
 if (!$certsValid) {
-    # Check if OpenSSL is available
-    $opensslPath = Get-Command openssl -ErrorAction SilentlyContinue
+    Write-Host " Generating SSL certificates using PowerShell..." -ForegroundColor Cyan
 
-    if (!$opensslPath) {
-        Write-Host "Error: OpenSSL not found - required for HTTPS certificates" -ForegroundColor Red
-        Write-Host ""
-        Write-Host "Options to install OpenSSL on Windows:" -ForegroundColor Yellow
-        Write-Host "1. Using Chocolatey: choco install openssl" -ForegroundColor White
-        Write-Host "2. Using Winget: winget install --id=ShiningLight.OpenSSL" -ForegroundColor White
-        Write-Host "3. Download from: https://slproweb.com/products/Win32OpenSSL.html" -ForegroundColor White
-        Write-Host ""
-        Write-Host "After installing OpenSSL, restart PowerShell and run this script again." -ForegroundColor Cyan
-        exit 1
-    }
-
-    Write-Host " Generating SSL certificates..." -ForegroundColor Cyan
-
-    # Generate private key
-    & openssl genrsa -out "$sslDir\localhost.key" 2048 2>$null
-
-    # Create certificate config file
-    $configPath = "$sslDir\localhost.cnf"
-
-    # Write config file line by line to avoid here-string issues
-    "[req]" | Out-File -FilePath $configPath -Encoding ASCII
-    "default_bits = 2048" | Out-File -FilePath $configPath -Append -Encoding ASCII
-    "prompt = no" | Out-File -FilePath $configPath -Append -Encoding ASCII
-    "default_md = sha256" | Out-File -FilePath $configPath -Append -Encoding ASCII
-    "distinguished_name = dn" | Out-File -FilePath $configPath -Append -Encoding ASCII
-    "req_extensions = v3_req" | Out-File -FilePath $configPath -Append -Encoding ASCII
-    "" | Out-File -FilePath $configPath -Append -Encoding ASCII
-    "[dn]" | Out-File -FilePath $configPath -Append -Encoding ASCII
-    "C=US" | Out-File -FilePath $configPath -Append -Encoding ASCII
-    "ST=CA" | Out-File -FilePath $configPath -Append -Encoding ASCII
-    "L=SF" | Out-File -FilePath $configPath -Append -Encoding ASCII
-    "O=Dev" | Out-File -FilePath $configPath -Append -Encoding ASCII
-    "CN=localhost" | Out-File -FilePath $configPath -Append -Encoding ASCII
-    "" | Out-File -FilePath $configPath -Append -Encoding ASCII
-    "[v3_req]" | Out-File -FilePath $configPath -Append -Encoding ASCII
-    "subjectAltName = @alt_names" | Out-File -FilePath $configPath -Append -Encoding ASCII
-    "" | Out-File -FilePath $configPath -Append -Encoding ASCII
-    "[alt_names]" | Out-File -FilePath $configPath -Append -Encoding ASCII
-    "DNS.1 = localhost" | Out-File -FilePath $configPath -Append -Encoding ASCII
-    "DNS.2 = *.localhost" | Out-File -FilePath $configPath -Append -Encoding ASCII
-    "IP.1 = 127.0.0.1" | Out-File -FilePath $configPath -Append -Encoding ASCII
-
-    # Create certificate signing request
-    & openssl req -new -key "$sslDir\localhost.key" `
-        -out "$sslDir\localhost.csr" `
-        -config $configPath 2>$null
-
-    # Generate self-signed certificate
-    & openssl x509 -req `
-        -in "$sslDir\localhost.csr" `
-        -signkey "$sslDir\localhost.key" `
-        -out "$sslDir\localhost.crt" `
-        -days 365 `
-        -extensions v3_req `
-        -extfile $configPath 2>$null
-
-    # Clean up temporary files
-    Remove-Item $configPath -Force -ErrorAction SilentlyContinue
-    Remove-Item "$sslDir\localhost.csr" -Force -ErrorAction SilentlyContinue
-
-    Write-Host "OK: SSL certificates generated" -ForegroundColor Green
-
-    # Try to add to Windows certificate store
     try {
-        $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2("$sslDir\localhost.crt")
-        $store = New-Object System.Security.Cryptography.X509Certificates.X509Store("Root", "LocalMachine")
-        $store.Open("ReadWrite")
-
-        $existingCerts = $store.Certificates | Where-Object { $_.Subject -eq $cert.Subject -and $_.Thumbprint -eq $cert.Thumbprint }
-
-        if (!$existingCerts) {
-            $store.Add($cert)
-            Write-Host "OK: Certificate added to Windows Trusted Root store" -ForegroundColor Green
+        # Create self-signed certificate using PowerShell (no OpenSSL required!)
+        $certParams = @{
+            Subject = "CN=localhost"
+            DnsName = @("localhost", "*.localhost", "127.0.0.1")
+            CertStoreLocation = "Cert:\CurrentUser\My"
+            KeyExportPolicy = "Exportable"
+            KeySpec = "Signature"
+            KeyLength = 2048
+            KeyAlgorithm = "RSA"
+            HashAlgorithm = "SHA256"
+            NotAfter = (Get-Date).AddDays(365)
         }
 
-        $store.Close()
+        # Generate certificate
+        $cert = New-SelfSignedCertificate @certParams
+
+        # Export certificate to PEM format for nginx
+        $certPath = "$sslDir\localhost.crt"
+        $keyPath = "$sslDir\localhost.key"
+        $pfxPath = "$sslDir\localhost.pfx"
+        $pfxPassword = ConvertTo-SecureString -String "temp" -Force -AsPlainText
+
+        # Export to PFX first
+        Export-PfxCertificate -Cert $cert -FilePath $pfxPath -Password $pfxPassword | Out-Null
+
+        # Convert PFX to PEM using PowerShell
+        $pfxCert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($pfxPath, $pfxPassword, "Exportable")
+
+        # Export certificate (public key)
+        $certPem = "-----BEGIN CERTIFICATE-----`n"
+        $certPem += [Convert]::ToBase64String($pfxCert.RawData, "InsertLineBreaks")
+        $certPem += "`n-----END CERTIFICATE-----"
+        $certPem | Out-File -FilePath $certPath -Encoding ASCII
+
+        # Export private key
+        $rsa = [System.Security.Cryptography.X509Certificates.RSACertificateExtensions]::GetRSAPrivateKey($pfxCert)
+        $keyBytes = $rsa.ExportRSAPrivateKey()
+        $keyPem = "-----BEGIN RSA PRIVATE KEY-----`n"
+        $keyPem += [Convert]::ToBase64String($keyBytes, "InsertLineBreaks")
+        $keyPem += "`n-----END RSA PRIVATE KEY-----"
+        $keyPem | Out-File -FilePath $keyPath -Encoding ASCII
+
+        # Clean up temporary PFX file
+        Remove-Item $pfxPath -Force -ErrorAction SilentlyContinue
+
+        Write-Host "OK: SSL certificates generated" -ForegroundColor Green
+
+        # Try to add to Windows certificate store
+        try {
+            $store = New-Object System.Security.Cryptography.X509Certificates.X509Store("Root", "LocalMachine")
+            $store.Open("ReadWrite")
+
+            $existingCerts = $store.Certificates | Where-Object { $_.Subject -eq $cert.Subject -and $_.Thumbprint -eq $cert.Thumbprint }
+
+            if (!$existingCerts) {
+                $store.Add($cert)
+                Write-Host "OK: Certificate added to Windows Trusted Root store" -ForegroundColor Green
+            }
+
+            $store.Close()
+        } catch {
+            Write-Host "Info:  Note: Certificate not added to Windows store (requires admin privileges)" -ForegroundColor Cyan
+            Write-Host "   You can add it manually later for trusted HTTPS access" -ForegroundColor Gray
+        }
+
+        # Remove certificate from personal store
+        Remove-Item "Cert:\CurrentUser\My\$($cert.Thumbprint)" -Force -ErrorAction SilentlyContinue
+
     } catch {
-        Write-Host "Info:  Note: Certificate not added to Windows store (requires admin privileges)" -ForegroundColor Cyan
-        Write-Host "   You can add it manually later for trusted HTTPS access" -ForegroundColor Gray
+        Write-Host "Error: Failed to generate certificates: $_" -ForegroundColor Red
+        Write-Host "Continuing without HTTPS - nginx may not start properly..." -ForegroundColor Yellow
     }
 }
 
