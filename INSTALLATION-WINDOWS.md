@@ -126,18 +126,13 @@ wsl --set-default-version 2
 The automated script will:
 1. ✅ Clean up any existing containers and volumes
 2. ✅ Create fresh environment configuration
-3. ✅ Generate HTTPS certificates (requires OpenSSL)
+3. ✅ Generate HTTPS certificates (using native PowerShell)
 4. ✅ Build Docker images (5-10 minutes)
 5. ✅ Start all services
 6. ✅ Run health checks
 7. ✅ Verify everything works
 
-**That's it!** The script handles everything automatically, including HTTPS setup.
-
-**Note**: The installer requires OpenSSL for HTTPS certificates. Install it with:
-- Chocolatey: `choco install openssl`
-- Winget: `winget install --id=ShiningLight.OpenSSL`
-- Or download from: https://slproweb.com/products/Win32OpenSSL.html
+**That's it!** The script handles everything automatically, including HTTPS setup using native PowerShell certificate generation.
 
 ## Manual Installation
 
