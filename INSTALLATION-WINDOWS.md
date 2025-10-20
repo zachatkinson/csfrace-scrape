@@ -616,10 +616,9 @@ Rename-Item docker-compose.override.yml.backup docker-compose.override.yml
 
 After successful installation:
 
-1. **Configure OAuth** (optional): [SETUP_APPLE_OAUTH.md](SETUP_APPLE_OAUTH.md)
-2. **Review API**: Browse https://localhost/docs
-3. **Explore Frontend**: Open https://localhost
-4. **Monitor Performance**: Check Grafana at http://localhost:3001
+1. **Review API**: Browse https://localhost/docs
+2. **Explore Frontend**: Open https://localhost
+3. **Monitor Performance**: Check Grafana at http://localhost:3001
 
 ---
 
