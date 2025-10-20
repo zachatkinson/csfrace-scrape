@@ -62,6 +62,16 @@ class AuthConfig(BaseConfig, SecurityMixin):
     MAX_LOGIN_ATTEMPTS: int = Field(5, ge=1, le=20, description="Max failed login attempts")
     LOCKOUT_DURATION_MINUTES: int = Field(15, ge=1, le=1440, description="Account lockout duration")
 
+    # Development Mode - Single-User Local Deployments
+    SKIP_AUTH_FOR_DEVELOPMENT: bool = Field(
+        False,
+        description="Skip authentication for single-user local deployments (NEVER use in production)"
+    )
+    DEFAULT_LOCAL_USER_ID: str = Field(
+        "local-user",
+        description="Default user ID for no-auth mode"
+    )
+
     @field_validator("SAME_SITE_COOKIES", mode="before")
     @classmethod
     def validate_same_site(cls, v: str) -> str:
@@ -69,6 +79,27 @@ class AuthConfig(BaseConfig, SecurityMixin):
         if v.lower() not in ("strict", "lax", "none"):
             raise ValueError("SAME_SITE_COOKIES must be 'strict', 'lax', or 'none'")
         return v.lower()
+
+    def model_post_init(self, __context) -> None:
+        """Post-initialization validation - prevent auth bypass in production."""
+        if self.SKIP_AUTH_FOR_DEVELOPMENT:
+            # Check if we're in production environment
+            import os
+            environment = os.getenv("ENVIRONMENT", "development").lower()
+
+            if environment == "production":
+                raise ValueError(
+                    "SECURITY ERROR: SKIP_AUTH_FOR_DEVELOPMENT=true is NOT ALLOWED in production! "
+                    "This would disable all authentication and create a massive security vulnerability. "
+                    "Set SKIP_AUTH_FOR_DEVELOPMENT=false or ENVIRONMENT=development"
+                )
+
+            logger.warning(
+                "⚠️  AUTH BYPASS ENABLED ⚠️  "
+                "Running in single-user mode with authentication disabled. "
+                "All API requests will use the default local user. "
+                "DO NOT use this in production!"
+            )
 
     @property
     def access_token_expire_delta(self) -> timedelta:

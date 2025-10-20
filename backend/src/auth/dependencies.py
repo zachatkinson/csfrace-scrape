@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 # Import configuration from centralized settings
 from src.config.settings import ConfigManager
+from src.core.logging_hierarchy import get_auth_logger
 
 from ..api.errors import APIErrorFactory
 from ..database.service import DatabaseService
@@ -38,12 +39,51 @@ def _get_auth_config() -> "AuthConfig":
 
 
 auth_config = _get_auth_config()
+logger = get_auth_logger()
 
 # OAuth2 scheme for token extraction
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl="auth/token",
     scopes={"read": "Read access", "write": "Write access", "admin": "Admin access"},
 )
+
+
+async def get_or_create_default_user(auth_service: AuthService) -> User:
+    """Get or create default local user for no-auth mode.
+
+    This function is used when SKIP_AUTH_FOR_DEVELOPMENT=true to provide
+    a default user for single-user local deployments.
+
+    Args:
+        auth_service: Auth service instance with database session
+
+    Returns:
+        User: Default local user
+    """
+    user_id = auth_config.DEFAULT_LOCAL_USER_ID
+
+    # Try to get existing user
+    user = auth_service.get_user_by_username(user_id)
+
+    if user is None:
+        # Create default user
+        logger.info(f"Creating default local user: {user_id}")
+        user = User(
+            id=user_id,
+            email="local@localhost",
+            username=user_id,
+            hashed_password="",  # No password needed for local user
+            is_active=True,
+            is_superuser=False,
+            full_name="Local User",
+        )
+        # Add to database using auth service
+        auth_service.session.add(user)
+        auth_service.session.commit()
+        auth_service.session.refresh(user)
+        logger.info(f"Default local user created: {user_id}")
+
+    return user
 
 
 def get_database_service() -> DatabaseService:
@@ -155,6 +195,13 @@ async def get_current_user_from_cookie(
 ) -> User:
     """Get current authenticated user from HTTP-only cookie (for Astro best practices)."""
 
+    # SKIP_AUTH bypass for single-user local deployments
+    # This allows the app to run without OAuth setup for local personal use
+    if auth_config.SKIP_AUTH_FOR_DEVELOPMENT:
+        logger.debug("Auth bypassed - returning default local user")
+        return await get_or_create_default_user(auth_service)
+
+    # Normal authentication flow below (ALL OAuth code preserved!)
     def raise_not_authenticated_error() -> None:
         raise APIErrorFactory.unauthorized("Not authenticated")
 

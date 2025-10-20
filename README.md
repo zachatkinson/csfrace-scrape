@@ -136,9 +136,12 @@ docker compose logs -f
 ```
 csfrace-scrape/                     # Monorepo root
 ├── README.md                       # This file
-├── INSTALLATION-MAC.md             # macOS install guide
-├── INSTALLATION-WINDOWS.md         # Windows install guide
 ├── CLAUDE.md                       # Orchestration standards
+├── docs/                           # Documentation
+│   ├── installation/              # Installation guides
+│   ├── deployment/                # Deployment guides
+│   ├── oauth/                     # OAuth setup guides
+│   └── development/               # Development notes
 ├── docker-compose.yml              # Production orchestration
 ├── docker-compose.dev.yml          # Development environment
 ├── docker-compose.test.yml         # CI/CD testing
@@ -404,8 +407,9 @@ docker compose exec redis redis-cli INFO
 ## 🐛 Troubleshooting
 
 See platform-specific installation guides for comprehensive troubleshooting:
-- [INSTALLATION-MAC.md](INSTALLATION-MAC.md) - macOS setup and troubleshooting
-- [INSTALLATION-WINDOWS.md](INSTALLATION-WINDOWS.md) - Windows setup and troubleshooting
+- [macOS Installation Guide](docs/installation/macos.md) - macOS setup and troubleshooting
+- [Windows Installation Guide](docs/installation/windows.md) - Windows multi-user setup
+- [Windows Local Setup](docs/installation/windows-local.md) - Windows single-user (no OAuth)
 
 ### Quick Fixes
 
@@ -443,8 +447,9 @@ docker compose build --no-cache
 ### Getting Help
 
 - 📖 **Documentation**:
-  - [INSTALLATION-MAC.md](INSTALLATION-MAC.md) - macOS installation guide
-  - [INSTALLATION-WINDOWS.md](INSTALLATION-WINDOWS.md) - Windows installation guide
+  - [Installation Guides](docs/installation/) - Platform-specific setup instructions
+  - [Deployment Guides](docs/deployment/) - Production deployment
+  - [OAuth Setup](docs/oauth/) - Configure OAuth providers
 - 🐛 **Bug Reports**: [GitHub Issues](https://github.com/zachatkinson/csfrace-scrape/issues)
 - 💬 **Discussions**: [GitHub Discussions](https://github.com/zachatkinson/csfrace-scrape/discussions)
 - 📝 **Logs**: Always check `docker compose logs -f` first
