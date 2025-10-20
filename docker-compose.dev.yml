@@ -70,7 +70,7 @@ services:
       - WEBAUTHN_ORIGIN=${WEBAUTHN_ORIGIN:-http://localhost}
       - PYTEST_TIMEOUT=60
       - UV_CACHE_DIR=/tmp/.uv-cache
-      - PYTHONPATH=/build/src
+      - PYTHONPATH=/build
       - UV_PROJECT_ENVIRONMENT=/usr/local
     volumes:
       # Mount source for hot reloading  
@@ -162,7 +162,7 @@ services:
       # Official recommendation: mount data to /var/lib/postgresql/data
       - postgres-dev-data:/var/lib/postgresql/data
       # Official recommendation: place init scripts in /docker-entrypoint-initdb.d/
-      - ./scripts/dev-init-db.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      # Note: Only load extensions, let Alembic manage schema
       - ./scripts/init-extensions.sql:/docker-entrypoint-initdb.d/02-extensions.sql:ro
       # Development: expose data directory for backup/restore
       - ./dev-backups:/backups:rw
@@ -353,6 +353,7 @@ services:
       - "80:80"  # Main entry point - unifies frontend + backend under single origin
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
     depends_on:
       backend-dev:
         condition: service_healthy
