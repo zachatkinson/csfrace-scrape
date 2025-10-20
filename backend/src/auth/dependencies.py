@@ -13,8 +13,9 @@ from src.config.settings import ConfigManager
 from src.core.logging_hierarchy import get_auth_logger
 
 from ..api.errors import APIErrorFactory
+from ..database.models import User as DBUser  # SQLAlchemy ORM model for database operations
 from ..database.service import DatabaseService
-from .models import TokenData, User
+from .models import TokenData, User  # Pydantic model for API responses
 from .oauth_service import OAuthService
 from .security import security_manager
 from .service import AuthService
@@ -66,11 +67,11 @@ async def get_or_create_default_user(auth_service: AuthService) -> User:
     user = auth_service.get_user_by_username(user_id)
 
     if user is None:
-        # Create default user
+        # Create default user using SQLAlchemy ORM model
         from datetime import UTC, datetime
 
         logger.info(f"Creating default local user: {user_id}")
-        user = User(
+        user = DBUser(  # Use SQLAlchemy model, not Pydantic model
             id=user_id,
             email="local@example.com",  # Use example.com (RFC 2606 reserved for testing)
             username=user_id,
