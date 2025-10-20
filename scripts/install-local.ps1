@@ -4,6 +4,25 @@
 
 $ErrorActionPreference = "Stop"
 
+# Helper function for single-keypress Y/N prompts
+function Read-YesNo {
+    param([string]$Prompt)
+
+    Write-Host $Prompt -NoNewline -ForegroundColor Yellow
+    Write-Host " [Y/N]: " -NoNewline -ForegroundColor White
+
+    while ($true) {
+        $key = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+        $char = $key.Character.ToString().ToUpper()
+
+        if ($char -eq "Y" -or $char -eq "N") {
+            Write-Host $char -ForegroundColor Cyan
+            return $char -eq "Y"
+        }
+        # Ignore invalid keys, wait for Y or N
+    }
+}
+
 Write-Host ""
 Write-Host "================================================================" -ForegroundColor Cyan
 Write-Host "  CSFrace Scrape - Local Single-User Installation (Windows)" -ForegroundColor Cyan
@@ -80,10 +99,10 @@ $existingVolumes = docker volume ls --filter "name=csfrace" --format "{{.Name}}"
 if ($existingVolumes) {
     Write-Host "⚠️  Existing data found from previous installation" -ForegroundColor Cyan
     Write-Host ""
-    $startFresh = Read-Host "Delete existing data and start fresh? [y/N]"
+    $startFresh = Read-YesNo "Delete existing data and start fresh?"
     Write-Host ""
 
-    if ($startFresh -match "^[Yy]$") {
+    if ($startFresh) {
         Write-Host "⏳ Removing existing data volumes..." -ForegroundColor Yellow
         docker compose -f docker-compose.dev.yml down -v 2>$null
         Write-Host "✅ Starting with fresh database" -ForegroundColor Green

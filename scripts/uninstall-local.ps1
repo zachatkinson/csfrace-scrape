@@ -4,6 +4,25 @@
 
 $ErrorActionPreference = "Stop"
 
+# Helper function for single-keypress Y/N prompts
+function Read-YesNo {
+    param([string]$Prompt)
+
+    Write-Host $Prompt -NoNewline -ForegroundColor Yellow
+    Write-Host " [Y/N]: " -NoNewline -ForegroundColor White
+
+    while ($true) {
+        $key = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+        $char = $key.Character.ToString().ToUpper()
+
+        if ($char -eq "Y" -or $char -eq "N") {
+            Write-Host $char -ForegroundColor Cyan
+            return $char -eq "Y"
+        }
+        # Ignore invalid keys, wait for Y or N
+    }
+}
+
 Write-Host ""
 Write-Host "================================================================" -ForegroundColor Red
 Write-Host "  CSFrace Scrape - Local Uninstallation (Windows)" -ForegroundColor Red
@@ -32,8 +51,8 @@ Write-Host ""
 # Confirm uninstallation
 Write-Host "⚠️  WARNING: This will stop all CSFrace services" -ForegroundColor Yellow
 Write-Host ""
-$confirm = Read-Host "Continue with uninstallation? [y/N]"
-if ($confirm -notmatch "^[Yy]$") {
+$confirm = Read-YesNo "Continue with uninstallation?"
+if (-not $confirm) {
     Write-Host ""
     Write-Host "❌ Uninstallation cancelled" -ForegroundColor Yellow
     Write-Host ""
@@ -63,10 +82,10 @@ Write-Host "    - PostgreSQL database" -ForegroundColor Gray
 Write-Host "    - Redis cache" -ForegroundColor Gray
 Write-Host "    - Scraped job data" -ForegroundColor Gray
 Write-Host ""
-$deleteData = Read-Host "Delete all data? [y/N]"
+$deleteData = Read-YesNo "Delete all data?"
 Write-Host ""
 
-if ($deleteData -match "^[Yy]$") {
+if ($deleteData) {
     Write-Host "⏳ Removing data volumes..." -ForegroundColor Yellow
     docker compose -f docker-compose.dev.yml down -v 2>$null
 
@@ -91,10 +110,10 @@ Write-Host ""
 Write-Host "  This frees disk space but means next install will rebuild" -ForegroundColor Gray
 Write-Host "  (5-10 minutes rebuild time)" -ForegroundColor Gray
 Write-Host ""
-$deleteImages = Read-Host "Delete Docker images? [y/N]"
+$deleteImages = Read-YesNo "Delete Docker images?"
 Write-Host ""
 
-if ($deleteImages -match "^[Yy]$") {
+if ($deleteImages) {
     Write-Host "⏳ Removing Docker images..." -ForegroundColor Yellow
 
     # Remove project images
@@ -120,10 +139,10 @@ Write-Host "  This includes:" -ForegroundColor Gray
 Write-Host "    - .env (backend config)" -ForegroundColor Gray
 Write-Host "    - frontend\.env (frontend config)" -ForegroundColor Gray
 Write-Host ""
-$deleteEnv = Read-Host "Delete .env files? [y/N]"
+$deleteEnv = Read-YesNo "Delete .env files?"
 Write-Host ""
 
-if ($deleteEnv -match "^[Yy]$") {
+if ($deleteEnv) {
     Write-Host "⏳ Removing .env files..." -ForegroundColor Yellow
 
     if (Test-Path .env) {
@@ -150,10 +169,10 @@ Write-Host "    - converted_content/ (scraped data)" -ForegroundColor Gray
 Write-Host "    - dev-output/ (development output)" -ForegroundColor Gray
 Write-Host "    - dev-logs/ (development logs)" -ForegroundColor Gray
 Write-Host ""
-$deleteOutput = Read-Host "Delete output files? [y/N]"
+$deleteOutput = Read-YesNo "Delete output files?"
 Write-Host ""
 
-if ($deleteOutput -match "^[Yy]$") {
+if ($deleteOutput) {
     Write-Host "⏳ Removing output files..." -ForegroundColor Yellow
 
     if (Test-Path converted_content) {
@@ -187,10 +206,10 @@ Write-Host "    - Build cache" -ForegroundColor Gray
 Write-Host ""
 Write-Host "  (Safe - only removes unused Docker resources)" -ForegroundColor Green
 Write-Host ""
-$pruneDocker = Read-Host "Prune Docker resources? [y/N]"
+$pruneDocker = Read-YesNo "Prune Docker resources?"
 Write-Host ""
 
-if ($pruneDocker -match "^[Yy]$") {
+if ($pruneDocker) {
     Write-Host "⏳ Pruning Docker resources..." -ForegroundColor Yellow
     docker system prune -f 2>$null
     Write-Host "✅ Docker resources pruned" -ForegroundColor Green
