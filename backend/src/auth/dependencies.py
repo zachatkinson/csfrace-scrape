@@ -59,11 +59,11 @@ async def get_or_create_default_user(auth_service: AuthService) -> User:
         auth_service: Auth service instance with database session
 
     Returns:
-        User: Default local user
+        User: Default local user (Pydantic model)
     """
     user_id = auth_config.DEFAULT_LOCAL_USER_ID
 
-    # Try to get existing user
+    # Try to get existing user (returns Pydantic User)
     user = auth_service.get_user_by_username(user_id)
 
     if user is None:
@@ -71,7 +71,7 @@ async def get_or_create_default_user(auth_service: AuthService) -> User:
         from datetime import UTC, datetime
 
         logger.info(f"Creating default local user: {user_id}")
-        user = DBUser(  # Use SQLAlchemy model, not Pydantic model
+        db_user = DBUser(  # Use SQLAlchemy model for database operations
             id=user_id,
             email="local@example.com",  # Use example.com (RFC 2606 reserved for testing)
             username=user_id,
@@ -83,10 +83,22 @@ async def get_or_create_default_user(auth_service: AuthService) -> User:
             updated_at=datetime.now(UTC),  # Explicitly set timestamp
         )
         # Add to database using auth service
-        auth_service.db.add(user)
+        auth_service.db.add(db_user)
         auth_service.db.commit()
-        auth_service.db.refresh(user)
+        auth_service.db.refresh(db_user)
         logger.info(f"Default local user created: {user_id}")
+
+        # Convert SQLAlchemy model to Pydantic model for API response
+        user = User(
+            id=db_user.id,
+            username=db_user.username,
+            email=db_user.email,
+            full_name=db_user.full_name,
+            is_active=db_user.is_active,
+            is_superuser=db_user.is_superuser,
+            created_at=db_user.created_at,
+            last_login=db_user.last_login,
+        )
 
     return user
 
