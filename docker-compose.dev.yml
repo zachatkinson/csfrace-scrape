@@ -34,6 +34,8 @@ services:
       - LOG_LEVEL=${BACKEND_LOG_LEVEL:-DEBUG}
       - SECRET_KEY=${SECRET_KEY:-dev-secret-key-not-for-production}
       - RELOAD_ON_CHANGE=true
+      # Skip authentication for single-user local development
+      - SKIP_AUTH_FOR_DEVELOPMENT=${SKIP_AUTH_FOR_DEVELOPMENT:-false}
       # DRY/SOLID: Use fixed service names for development 
       - REDIS_SERVICE_NAME=redis-dev
       - POSTGRES_SERVICE_NAME=postgres-dev
