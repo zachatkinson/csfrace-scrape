@@ -82,9 +82,9 @@ async def get_or_create_default_user(auth_service: AuthService) -> User:
             updated_at=datetime.now(UTC),  # Explicitly set timestamp
         )
         # Add to database using auth service
-        auth_service.session.add(user)
-        auth_service.session.commit()
-        auth_service.session.refresh(user)
+        auth_service.db.add(user)
+        auth_service.db.commit()
+        auth_service.db.refresh(user)
         logger.info(f"Default local user created: {user_id}")
 
     return user
