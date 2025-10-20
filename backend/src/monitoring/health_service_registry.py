@@ -469,12 +469,25 @@ async def initialize_health_service_registry(
     redis_client: Redis, db_session_factory: Any
 ) -> HealthServiceRegistry:
     """Initialize the global health service registry."""
+    import os
+
     global health_service_registry
 
-    health_service_registry = HealthServiceRegistry(redis_client)
-    await health_service_registry.initialize_default_services(db_session_factory)
+    # Environment-aware frontend URL (development uses -dev suffix)
+    environment = os.getenv("ENVIRONMENT", "development").lower()
+    frontend_service = "frontend-dev" if environment == "development" else "frontend"
+    frontend_url = f"http://{frontend_service}:3000"
 
-    logger.info("Health Service Registry initialized following Astro MCP best practices")
+    health_service_registry = HealthServiceRegistry(redis_client)
+    await health_service_registry.initialize_default_services(
+        db_session_factory, frontend_url=frontend_url
+    )
+
+    logger.info(
+        "Health Service Registry initialized following Astro MCP best practices",
+        environment=environment,
+        frontend_url=frontend_url,
+    )
     return health_service_registry
 
 

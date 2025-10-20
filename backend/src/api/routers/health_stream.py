@@ -69,12 +69,19 @@ class HealthSSEService(BaseSSEService):
 
         # Helper function to check frontend health
         async def check_frontend_health() -> dict[str, str | int | float]:
+            import os
+
+            # Environment-aware frontend URL (development uses -dev suffix)
+            environment = os.getenv("ENVIRONMENT", "development").lower()
+            frontend_service = "frontend-dev" if environment == "development" else "frontend"
+            frontend_url = f"http://{frontend_service}:3000/"
+
             try:
                 start_time = time.time()
                 timeout = aiohttp.ClientTimeout(total=5)
                 async with (
                     aiohttp.ClientSession(timeout=timeout) as session,
-                    session.get("http://frontend:3000/") as response,
+                    session.get(frontend_url) as response,
                 ):
                     response_time_ms = round((time.time() - start_time) * 1000, 2)
                     return {
