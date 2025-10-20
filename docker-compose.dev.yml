@@ -109,6 +109,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    user: "0:0"  # Run as root in development for Windows volume permission fix
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     # Environment variables with sensible defaults (env_file optional)
