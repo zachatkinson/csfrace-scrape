@@ -72,7 +72,7 @@ async def get_or_create_default_user(auth_service: AuthService) -> User:
         logger.info(f"Creating default local user: {user_id}")
         user = User(
             id=user_id,
-            email="local@localhost.local",  # Valid email format for Pydantic
+            email="local@example.com",  # Use example.com (RFC 2606 reserved for testing)
             username=user_id,
             hashed_password="",  # No password needed for local user
             is_active=True,
