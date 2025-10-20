@@ -3,8 +3,8 @@
 # Based on official Docker recommendations for 2024+
 
 # CRITICAL: lightningcss ARM64 workaround (still required as of 2025)
-# Using build arg instead of hardcoded platform to satisfy Docker linting
 # Default to linux/amd64 to fix lightningcss native binary issues on ARM64 Macs
+# Windows/Linux AMD64 will override this in docker-compose to use native platform
 # See: https://github.com/parcel-bundler/lightningcss/issues/335
 ARG BUILDPLATFORM=linux/amd64
 FROM --platform=${BUILDPLATFORM} node:20-alpine
@@ -22,20 +22,8 @@ RUN addgroup -g 1001 -S nodejs && \
 # Copy package files first for better layer caching
 COPY package.json pnpm-lock.yaml ./
 
-# Install dependencies based on NODE_ENV
-# Docker best practice: Use build args with defaults
-ARG NODE_ENV=production
-ENV NODE_ENV=${NODE_ENV}
-
-# Install dependencies conditionally based on NODE_ENV
-# lightningcss-wasm is installed from optionalDependencies in package.json
-RUN if [ "$NODE_ENV" = "development" ]; then \
-        pnpm install --frozen-lockfile; \
-    else \
-        pnpm install --frozen-lockfile --production=false && \
-        pnpm run build && \
-        pnpm prune --production; \
-    fi
+# Install ALL dependencies (including devDependencies for build)
+RUN pnpm install --frozen-lockfile
 
 # CRITICAL LIGHTNINGCSS FIX: Create pkg directory and copy WASM files
 # Fixes ARM64 Docker + lightningcss incompatibility (missing ../pkg directory)
@@ -48,13 +36,14 @@ RUN mkdir -p node_modules/.pnpm/lightningcss@1.30.1/node_modules/lightningcss/pk
 # Copy source code and ensure proper ownership
 COPY --chown=astro:nodejs . .
 
-# Ensure the astro user has write permissions to the entire app directory
-RUN chown -R astro:nodejs /app
+# Build the application
+ARG NODE_ENV=production
 
-# Build only in production (when not already built above)
-RUN if [ "$NODE_ENV" = "production" ] && [ ! -d "dist" ]; then \
-        pnpm run build; \
-    fi
+# Always build in production mode (for now - testing)
+RUN pnpm run build && pnpm prune --production
+
+# Set NODE_ENV for runtime
+ENV NODE_ENV=production
 
 # Switch to non-root user
 USER astro

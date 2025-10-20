@@ -103,6 +103,10 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        - NODE_ENV=production
+        # Override BUILDPLATFORM on Windows/Linux AMD64 (Mac ARM64 uses default linux/amd64 for lightningcss workaround)
+        - BUILDPLATFORM=${DOCKER_DEFAULT_PLATFORM:-linux/amd64}
     ports:
       - "${FRONTEND_PORT:-3010}:3000"
     environment:
