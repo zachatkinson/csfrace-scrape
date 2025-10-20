@@ -350,7 +350,8 @@ services:
   nginx-dev:
     image: nginx:1.25-alpine
     ports:
-      - "80:80"  # Main entry point - unifies frontend + backend under single origin
+      - "80:80"    # HTTP - Main entry point
+      - "443:443"  # HTTPS - Secure access
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
