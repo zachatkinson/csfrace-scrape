@@ -8,6 +8,7 @@
 .env.prod
 .env.staging
 .env.test
+.env.windows
 
 # Docker
 .docker/
@@ -68,6 +69,7 @@ secrets/
 *.pem
 *.key
 *.crt
+nginx/ssl/
 
 # Local development overrides
 docker-compose.local.yml
