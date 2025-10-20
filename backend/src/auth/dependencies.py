@@ -67,15 +67,19 @@ async def get_or_create_default_user(auth_service: AuthService) -> User:
 
     if user is None:
         # Create default user
+        from datetime import UTC, datetime
+
         logger.info(f"Creating default local user: {user_id}")
         user = User(
             id=user_id,
-            email="local@localhost",
+            email="local@localhost.local",  # Valid email format for Pydantic
             username=user_id,
             hashed_password="",  # No password needed for local user
             is_active=True,
             is_superuser=False,
             full_name="Local User",
+            created_at=datetime.now(UTC),  # Explicitly set to avoid Pydantic validation error
+            updated_at=datetime.now(UTC),  # Explicitly set timestamp
         )
         # Add to database using auth service
         auth_service.session.add(user)
