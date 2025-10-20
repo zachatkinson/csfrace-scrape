@@ -14,12 +14,10 @@ Complete installation guide for CSFrace Scrape on Windows 10/11.
 - [Prerequisites](#prerequisites)
   - [Required Software](#required-software)
   - [System Requirements](#system-requirements)
-  - [WSL 2 Setup](#wsl-2-setup)
-- [Quick Start (Recommended)](#quick-start-recommended)
+- [Quick Start](#quick-start)
   - [1. Download the Project](#1-download-the-project)
   - [2. Extract Files](#2-extract-files)
   - [3. Run the Installer](#3-run-the-installer)
-- [Manual Installation](#manual-installation)
 - [Service URLs](#service-urls)
 - [Common Commands](#common-commands)
 - [Troubleshooting](#troubleshooting)
@@ -48,6 +46,21 @@ winget install Microsoft.PowerShell
 ```powershell
 $PSVersionTable.PSVersion
 # Should show 7.x or higher
+```
+
+**Set PowerShell 7 as Default (Recommended):**
+
+After installing PowerShell 7, set it as your default terminal:
+
+1. **Open Windows Terminal** (Win + X → Terminal)
+2. **Click the down arrow (v)** at the top
+3. **Select "Settings"**
+4. **Under "Default profile"**, select **"PowerShell"** (not "Windows PowerShell")
+5. **Click "Save"**
+
+If you don't have Windows Terminal, install it first:
+```powershell
+winget install Microsoft.WindowsTerminal
 ```
 
 #### 2. Docker Desktop for Windows
@@ -91,7 +104,7 @@ Docker Desktop requires WSL 2 to run containers on Windows.
 |-----------|---------|-------------|
 | **RAM** | 4GB | 8GB |
 | **Disk Space** | 10GB free | 20GB+ free |
-| **CPU** | 2 cores, 64-bit with virtualization | 4+ cores |
+| **CPU** | 2 cores 64-bit with virtualization | 4+ cores |
 | **Windows Version** | Windows 10 version 2004+ | Windows 11 |
 
 **Check Virtualization:**
@@ -101,7 +114,7 @@ Docker Desktop requires WSL 2 to run containers on Windows.
 
 ---
 
-## Quick Start (Recommended)
+## Quick Start
 
 ### 1. Download the Project
 
@@ -174,90 +187,19 @@ Ready to use!
 
 ---
 
-## Manual Installation
-
-<details>
-<summary>Click to expand manual installation steps</summary>
-
-If you prefer step-by-step control, follow these instructions:
-
-### Step 1: Install Docker Desktop
-
-1. Download from [docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop/)
-2. Run the installer: `Docker Desktop Installer.exe`
-3. Start Docker Desktop from Start Menu
-4. Wait for Docker to start (whale icon in system tray)
-
-**Verify Installation:**
-```powershell
-docker --version
-docker compose version
-```
-
-### Step 2: Download Project Files
-
-Follow [steps 1-2 from Quick Start](#quick-start-recommended)
-
-### Step 3: Configure Environment
-
-```powershell
-# Navigate to project directory
-cd "$env:USERPROFILE\Desktop\csfrace-scrape-master"
-
-# Copy example environment file
-Copy-Item .env.example .env
-
-# Edit .env with your preferred settings (optional)
-notepad .env
-```
-
-### Step 4: Build Images
-
-```powershell
-# Build all Docker images (first time: 5-10 minutes)
-docker compose build
-```
-
-### Step 5: Start Services
-
-```powershell
-# Start all services in detached mode
-docker compose up -d
-
-# Watch logs (optional)
-docker compose logs -f
-```
-
-### Step 6: Verify Installation
-
-```powershell
-# Check service health
-docker compose ps
-
-# Test backend API via HTTPS
-Invoke-RestMethod -Uri https://localhost/health -SkipCertificateCheck
-
-# Open frontend in browser
-start https://localhost
-```
-
-</details>
-
----
-
 ## Service URLs
 
 Once installed, access the application at:
 
-| Service | URL | Description |
-|---------|-----|-------------|
-| **Frontend (HTTPS)** | https://localhost | Main web interface (recommended) |
-| **Backend API (HTTPS)** | https://localhost/api | REST API via nginx (recommended) |
-| **API Documentation** | https://localhost/docs | Interactive API docs (Swagger UI) |
-| **Grafana** | http://localhost:3001 | Analytics dashboards (admin/admin) |
-| **Prometheus** | http://localhost:9090 | Metrics monitoring |
-| **Frontend (HTTP)** | http://localhost:3000 | Direct access (without nginx) |
-| **Backend API (HTTP)** | http://localhost:8000 | Direct access (without nginx) |
+| Service                  | URL                      | Description                              |
+|--------------------------|--------------------------|------------------------------------------|
+| **Frontend (HTTPS)**     | https://localhost        | Main web interface (recommended)         |
+| **Backend API (HTTPS)**  | https://localhost/api    | REST API via nginx (recommended)         |
+| **API Documentation**    | https://localhost/docs   | Interactive API docs (Swagger UI)        |
+| **Grafana**              | http://localhost:3001    | Analytics dashboards (admin/admin)       |
+| **Prometheus**           | http://localhost:9090    | Metrics monitoring                       |
+| **Frontend (HTTP)**      | http://localhost:3000    | Direct access (without nginx)            |
+| **Backend API (HTTP)**   | http://localhost:8000    | Direct access (without nginx)            |
 
 **Recommended:** Use HTTPS URLs (https://localhost) for all development work, especially when using OAuth.
 
@@ -469,12 +411,12 @@ All PowerShell scripts in this project are unsigned. You may encounter execution
 
 ### Available Scripts
 
-| Script | Purpose | Requires Admin |
-|--------|---------|----------------|
-| `.\scripts\install.ps1` | Automated installation | **Yes** |
-| `.\scripts\uninstall.ps1` | Automated uninstallation | Recommended |
-| `.\create-https-cert.ps1` | Generate SSL certificates | **Yes** (optional) |
-| `.\scripts\remove-localhost-cert.ps1` | Remove SSL certificate | **Yes** |
+| Script                               | Purpose                  | Requires Admin     |
+|--------------------------------------|--------------------------|-------------------|
+| `.\scripts\install.ps1`              | Automated installation   | **Yes**           |
+| `.\scripts\uninstall.ps1`            | Automated uninstallation | Recommended       |
+| `.\create-https-cert.ps1`            | Generate SSL certificates | **Yes** (optional) |
+| `.\scripts\remove-localhost-cert.ps1` | Remove SSL certificate   | **Yes**           |
 
 ### Unblocking Scripts
 
