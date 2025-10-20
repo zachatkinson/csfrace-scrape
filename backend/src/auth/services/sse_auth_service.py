@@ -208,18 +208,9 @@ class SSEAuthService:
         Returns:
             Dictionary of SSE headers
         """
-        environment = os.getenv("ENVIRONMENT", "development").lower()
-        frontend_origin = (
-            "http://localhost:3000"
-            if environment == "development"
-            else os.getenv("FRONTEND_URL", "https://your-domain.com")
-        )
-
+        # CORS headers removed - nginx handles CORS to avoid duplicate headers
         return {
             "Content-Type": "text/event-stream",
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": frontend_origin,
-            "Access-Control-Allow-Credentials": "true",
-            "Access-Control-Allow-Headers": "Cache-Control",
         }

@@ -245,8 +245,6 @@ async def performance_stream(request: Request) -> StreamingResponse:
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET",
-            "Access-Control-Allow-Headers": "Cache-Control",
+            # CORS headers removed - nginx handles CORS to avoid duplicate headers
         },
     )

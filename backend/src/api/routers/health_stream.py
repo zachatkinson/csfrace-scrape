@@ -205,8 +205,7 @@ async def health_stream(request: Request, db: DBSession) -> StreamingResponse:
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "Cache-Control",
+            # CORS headers removed - nginx handles CORS to avoid duplicate headers
         },
     )
 
