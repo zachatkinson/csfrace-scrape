@@ -52,16 +52,13 @@ $PSVersionTable.PSVersion
 
 After installing PowerShell 7, set it as your default terminal:
 
-1. **Open Windows Terminal** (Win + X → Terminal)
-2. **Click the down arrow (v)** at the top
+1. **Open Windows Terminal as Administrator:**
+   - Press `Win + X`
+   - Select **Terminal (Admin)**
+2. **Click the down arrow (v)** at the top of the Terminal window
 3. **Select "Settings"**
 4. **Under "Default profile"**, select **"PowerShell"** (not "Windows PowerShell")
 5. **Click "Save"**
-
-If you don't have Windows Terminal, install it first:
-```powershell
-winget install Microsoft.WindowsTerminal
-```
 
 #### 2. Docker Desktop for Windows
 
