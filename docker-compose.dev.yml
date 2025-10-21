@@ -50,7 +50,7 @@ services:
       - SCRAPER_REQUEST_TIMEOUT=${SCRAPER_REQUEST_TIMEOUT:-30}
       - SCRAPER_MAX_RETRIES=${SCRAPER_MAX_RETRIES:-3}
       - ENABLE_CORS=${ENABLE_CORS:-true}
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      - CORS_ORIGINS=${CORS_ORIGINS:-https://localhost,http://localhost:3000,http://127.0.0.1:3000}
       - ENABLE_DEBUG_TOOLBAR=true
       # OAuth2 Configuration (DRY: from centralized .env)
       - OAUTH_GOOGLE_CLIENT_ID=${OAUTH_GOOGLE_CLIENT_ID:-}
@@ -298,9 +298,9 @@ services:
     networks:
       - csfrace-dev-network
     restart: unless-stopped
-    # DRY/SOLID: Health check using environment variables  
+    # DRY/SOLID: Health check using internal port (always 3000 inside container)
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:${GRAFANA_PORT}/api/health || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
