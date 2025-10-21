@@ -90,7 +90,8 @@ async def download_job(job_id: str, db: DBSession) -> FileResponse:
     # Security validation: Sanitize output_dir path (prevent path traversal)
     # Inline validation for CodeQL taint tracking recognition
     output_dir_str = str(output_dir)
-    normalized_output = os.path.normpath(output_dir_str)
+    # CRITICAL: Must convert to absolute path before comparison (relative paths won't match)
+    normalized_output = os.path.normpath(os.path.abspath(output_dir_str))
     normalized_base = os.path.normpath(os.path.abspath(DEFAULT_OUTPUT_DIR))
 
     # CodeQL-recognized guard: constant string comparison (StringConstCompare pattern)
@@ -202,7 +203,8 @@ async def _create_job_archive(job_id: str, output_dir: Path) -> Path:
     """
     # Validate output_dir to prevent path traversal (inline for CodeQL taint tracking)
     output_dir_str = str(output_dir)
-    normalized_output = os.path.normpath(output_dir_str)
+    # CRITICAL: Must convert to absolute path before comparison (relative paths won't match)
+    normalized_output = os.path.normpath(os.path.abspath(output_dir_str))
     normalized_base = os.path.normpath(os.path.abspath(DEFAULT_OUTPUT_DIR))
 
     # CodeQL-recognized guard: constant string comparison
