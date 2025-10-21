@@ -122,15 +122,21 @@ Docker Desktop requires WSL 2 to run containers on Windows.
 
 ### One-Command Installation
 
-**1. Clone the repository:**
+**1. Download the Project**
 
-```powershell
-# Clone with submodules
-git clone --recurse-submodules https://github.com/zachatkinson/csfrace-scrape.git
-cd csfrace-scrape
-```
+Visit [github.com/zachatkinson/csfrace-scrape](https://github.com/zachatkinson/csfrace-scrape):
 
-**2. Run the automated installer (as Administrator):**
+1. Click the green **Code** button
+2. Select **Download ZIP**
+3. Save to your **Desktop** (or preferred location)
+
+**2. Extract Files**
+
+1. Right-click the downloaded ZIP file
+2. Select **Extract All...**
+3. Click **Extract** (creates `csfrace-scrape-master` folder)
+
+**3. Run the automated installer (as Administrator):**
 
 > **IMPORTANT:** The installer requires **Administrator privileges** to add SSL certificates to Windows' Trusted Root store.
 
@@ -141,13 +147,17 @@ cd csfrace-scrape
    - Select **Windows PowerShell (Admin)** or **Terminal (Admin)**
    - Or: Right-click PowerShell icon → **Run as Administrator**
 
-2. **Navigate to the project folder:**
+2. **Navigate to the extracted folder:**
    ```powershell
-   cd path\to\csfrace-scrape
+   cd "$env:USERPROFILE\Desktop\csfrace-scrape-master"
    ```
 
-3. **Run the installer:**
+3. **Unblock and run the installer:**
    ```powershell
+   # Unblock the script (required for unsigned scripts)
+   Unblock-File -Path .\scripts\install-local.ps1
+
+   # Run the installer
    .\scripts\install-local.ps1
    ```
 
@@ -347,6 +357,10 @@ docker compose -f docker-compose.dev.yml ps backend-dev
 ### Automated Uninstall (Recommended)
 
 ```powershell
+# Unblock the script
+Unblock-File -Path .\scripts\uninstall-local.ps1
+
+# Run the uninstaller (as Administrator recommended)
 .\scripts\uninstall-local.ps1
 ```
 
@@ -535,21 +549,25 @@ docker system prune -a --volumes
 If you prefer manual setup or the automated installer fails:
 
 ```powershell
-# 1. Clone repository
-git clone --recurse-submodules https://github.com/zachatkinson/csfrace-scrape.git
-cd csfrace-scrape
+# 1. Download and extract
+# Visit https://github.com/zachatkinson/csfrace-scrape
+# Click Code → Download ZIP
+# Extract to Desktop (creates csfrace-scrape-master folder)
 
-# 2. Copy environment files
+# 2. Navigate to the folder
+cd "$env:USERPROFILE\Desktop\csfrace-scrape-master"
+
+# 3. Copy environment files
 Copy-Item .env.windows.example .env
 Copy-Item frontend/.env.local.example frontend/.env
 
-# 3. Start services (development mode)
+# 4. Start services (development mode)
 docker compose -f docker-compose.dev.yml up -d
 
-# 4. Wait for services to start (30-60 seconds)
+# 5. Wait for services to start (30-60 seconds)
 Start-Sleep -Seconds 60
 
-# 5. Open browser
+# 6. Open browser
 Start-Process https://localhost
 ```
 
