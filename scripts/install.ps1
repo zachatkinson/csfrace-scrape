@@ -81,8 +81,8 @@ if ($existingVolumes -gt 0) {
 # Check if .env exists
 if (!(Test-Path .env)) {
     Write-Host " Creating .env file from template..." -ForegroundColor Yellow
-    Copy-Item .env.example .env
-    Write-Host "OK: .env created" -ForegroundColor Green
+    Copy-Item .env.windows.example .env
+    Write-Host "OK: .env created from Windows template" -ForegroundColor Green
 } else {
     Write-Host "OK: .env already exists" -ForegroundColor Green
 }
