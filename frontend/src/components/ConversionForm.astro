@@ -6,14 +6,13 @@
  * Single Responsibility: Handles all conversion form functionality
  */
 
-// For client-side components, always use PUBLIC_API_BASE_URL (browser-accessible)
-import { getApiBaseUrl } from '../constants/api';
 import DynamicGreeting from './DynamicGreeting.astro';
-const apiBaseUrl = getApiBaseUrl();
+// NOTE: Do NOT pass data-api-url attribute - client-side code will call getApiBaseUrl()
+// which properly selects browser URL vs server URL based on execution context
 ---
 
 <!-- Custom element wrapper with data attributes (Astro best practice) -->
-<conversion-form data-api-url={apiBaseUrl} data-default-mode="bulk">
+<conversion-form data-default-mode="bulk">
   <div class="glass-card p-8 h-full">
     <!-- Content Container -->
     <div id="content-container" class="space-y-8">
