@@ -9,6 +9,7 @@
 
 - 🚀 **Full-Stack Monorepo** - Backend (Python/FastAPI) + Frontend (Astro/React) in one repository
 - 🔄 **Real-Time Updates** - Server-Sent Events (SSE) for live job status
+- 📦 **Batch Processing** - Process multiple URLs concurrently (CSV, TXT, JSON) - [See examples](docs/examples/)
 - 🔐 **Enterprise Auth** - OAuth 2.0 (Google, GitHub, Facebook, Apple) + WebAuthn passkeys
 - 📊 **Built-in Monitoring** - Prometheus metrics + Grafana dashboards
 - 🐳 **Production-Ready Docker** - Multi-stage builds, health checks, security hardening
