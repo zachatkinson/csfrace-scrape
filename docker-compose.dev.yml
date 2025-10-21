@@ -118,11 +118,13 @@ services:
     environment:
       - NODE_ENV=development
       # DRY/SOLID: Use centralized URLs from .env (single source of truth)
-      - VITE_API_URL=${FRONTEND_API_URL:-http://localhost}
-      - PUBLIC_API_BASE_URL=${FRONTEND_API_URL:-http://localhost}
-      - REACT_APP_API_URL=${FRONTEND_API_URL:-http://localhost}
-      # Server-side API URL for Docker internal networking
-      - VITE_SERVER_API_URL=${FRONTEND_SERVER_API_URL:-http://localhost}
+      # Browser-side API URL (goes through nginx proxy with HTTPS)
+      - VITE_API_URL=${FRONTEND_API_URL:-https://localhost}
+      - PUBLIC_API_BASE_URL=${FRONTEND_API_URL:-https://localhost}
+      - REACT_APP_API_URL=${FRONTEND_API_URL:-https://localhost}
+      # Server-side API URL for Astro SSR (Docker internal networking with HTTP)
+      - VITE_SERVER_API_URL=${FRONTEND_SERVER_API_URL:-http://backend-dev:8000}
+      - SERVER_API_BASE_URL=${FRONTEND_SERVER_API_URL:-http://backend-dev:8000}
       - REACT_APP_API_TIMEOUT=${FRONTEND_API_TIMEOUT:-30000}
       - REACT_APP_THEME=${FRONTEND_THEME:-light}
       - REACT_APP_MONITORING_ENABLED=true
